@@ -1,0 +1,24 @@
+nrank               8
+H                   8
+U                  11
+normtyp          NONE # HALF
+taum                0.002
+wtagain             2.
+noise               0 # 0.005
+
+bgain               1.
+wegain              2. 
+wigain             14. 
+
+da                  0. # 0.005 # a = 0 ==> linear delaytaps
+dmax                2.000
+dn                100
+dq                  0.5
+
+tauzi               0.002
+tauzj               0.002
+taue                0.002
+taup               10.
+
+#nldot             100
+nstep            0 # 5000
