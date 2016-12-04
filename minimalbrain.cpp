@@ -39,6 +39,7 @@ vector<float> tauzivec;
 
 void parseparams(string paramfile) {
     Parseparam *pp = new Parseparam(paramfile);
+
     pp->postparam("nrank",&nrank,Parseparam::Int);
     pp->postparam("H",&H,Parseparam::Int);
     pp->postparam("U",&U,Parseparam::Int);
@@ -96,6 +97,7 @@ void setuplogging() {
     new PopLogger(semopop,"semowsu.log",Pop::WSU);
     new PopLogger(semopop,"semodsu.log",Pop::DSU);
     new PopLogger(semopop,"semoact.log",Pop::ACT);
+    new PrjLogger(semoprj,"semoprn.log",Prj::PRN);
 }
 
 void doprinting() {
@@ -123,7 +125,7 @@ int main(int argc, char** argv) {
 =======
   parseparams(paramfile);
 
-  semopop = new SensoryMotorPop("sensoryinput","motoroutput",taum,nrank,H,U,musicdelay,0.0); 
+  semopop = new SensoryMotorPop("sensoryinput","motoroutput",musicdelay,nrank,H,U,taum); 
   semopop->setnormtype(Pop::NONE);
   semopop->setwtagain(wtagain);
     
@@ -131,17 +133,16 @@ int main(int argc, char** argv) {
 
   int n = tapsvec.size();
 
-//   float k = (float)n/16.;
-//   wegain /= k; wigain /= k;
-
   semoprj = new PrjD(semopop,semopop,tapsvec,tauzivec,tauzj,taue,taup);
   semoprj->setselfconn(true,true,true);
   semoprj->reinit();
 
   MPI_Barrier(Globals::_comm_world);
-  if (ISROOT)
-      fprintf(stderr,"H = %d U = %d taup = %.3f sec bgain = %.4f wegain = %.4f wigain = %.4f n = %d\n",
-	      H,U,taup,bgain,wegain,wigain,n);
+  if (ISROOT) {
+      fprintf(stderr,"H = %d U = %d taum = %.3f ",H,U,taum);
+      fprintf(stderr,"taup = %.3f sec bgain = %.4f wegain = %.4f wigain = %.4f n = %d\n",
+	      taup,bgain,wegain,wigain,n);
+  }
   MPI_Barrier(Globals::_comm_world);
   
   setuplogging();
@@ -150,12 +151,10 @@ int main(int argc, char** argv) {
 
   semoprj->setwegain(wegain);
   semoprj->setwigain(wigain);
-  Globals::setnldot(nldot);
 
-  Globals::start();
-
-  float inent,inlike,iwgain;
-  semopop->setiwgain(1.);
+  float inent,inlike,inon,igain = 1.,wgain = 0.,prn;
+  semopop->setigain(1.);
+  semopop->setwgain(0.);
   semoprj->setprn(1.);
 
   if (ISROOT) std::cerr << "Running with music input " << std::endl;
@@ -167,36 +166,40 @@ int main(int argc, char** argv) {
   if (ISROOT)
     std::cerr << "Done!" << std::endl;
 
+  if (ISROOT) std::cerr << "music simtime = " << Globals::_musicstoptime << std::endl;
+  if (ISROOT) std::cerr << "music timestep = " << Globals::_musictimestep << std::endl;
+  idur = (Globals::_musictimestep+Globals::_dt)/Globals::_dt;
+  if (ISROOT) std::cerr << "idur = " << idur << std::endl;
+
+  Globals::setnldot(nldot);
+
+  Globals::start();
+
   for (int simt=0; Globals::_musicruntime->time() < Globals::_musicstoptime; simt++) {
       inent = semopop->inentropy();
       inlike = semopop->inlikelihood();
-      iwgain = calciwgain(inent,inlike);
+      inon = semopop->inon();
+      if (ISROOT)
+	  fprintf(outf,"%8d %15.6f %15.6f %4d\n",Globals::_simstep,inent,inlike,inon);
+      if (inon>0) {
+	  wgain = 0.;
+	  prn = 1.;
+      } else {
+	  wgain = 1.;
+	  prn = 0.;
+      }
+      if (Globals::_simstep>nstep) { prn = 0.; igain = 0.; wgain = 1.; }
+      MPI_Bcast(&prn,1,MPI_FLOAT,0,Globals::_comm_world);
+      MPI_Bcast(&wgain,1,MPI_FLOAT,0,Globals::_comm_world);
+      semopop->setigain(igain);
+      semopop->setwgain(wgain);
+      semoprj->setprn(prn);
       for (int step=0; step<idur; step++) Globals::updstateall();
   }
-  if (ISROOT) std::cerr << " Done!" << std::endl;
-  
-  if (ISROOT) std::cerr << "Running after music input" << std::endl;
-
-  semopop->blockmusicinput(true);
-  semopop->setiwgain(0.);
-  semoprj->setprn(0.);
-
-  vector<float> invec(88,0.);
-  //  invec[0] = 1.; invec[1] = 0.; invec[2] = 1.; invec[3] = 0.; invec[4] = 1.; invec[5] = 0.;
-  invec[40] = 0.; invec[41] = 1.; invec[42] = 0.; invec[43] = 1.; invec[44] = 0.; invec[45] = 1.;
-
-  for (int step=0; step<nstep; step++) {
-      if (Globals::_simstep>13000) semopop->setlgi(invec,true);
-      inent = semopop->inentropy();
-      inlike = semopop->inlikelihood();
-      iwgain = calciwgain(inent,inlike);
-      //      semopop->setiwgain(iwgain);
-      Globals::updstateall(false);
-  }
-
-  if (ISROOT) std::cerr << " Done!" << std::endl;
 
   Globals::stop();
+
+  fclose(outf);
     
   MPI_Barrier(Globals::_comm_world);
     

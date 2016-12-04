@@ -18,7 +18,7 @@ dq                  0.5
 tauzi               0.002
 tauzj               0.002
 taue                0.002
-taup               10.
+taup                1.
 
-#nldot             100
-nstep            0 # 5000
+nldot             100
+nstep            3000
