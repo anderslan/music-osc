@@ -15,23 +15,25 @@
 #include "base/source/MotorPop.h" 
 #include "base/source/SensoryMotorPop.h" 
 #include "base/source/PrjD.h"
+#include "base/source/Prj.h"
+#include "base/source/Prj11.h"
 #include "base/source/Logger.h"
 #include "utils/Utils.h"
-#include "utils/RndGen.h"
 #include "utils/Parseparam.h"
-#include "utils/Patio.h"
 
 using namespace std;
 
 int nrank = 8,H = 8,U = 88/H,dn = 40,nstep = 100,idur = 50,nldot = 0;
-float taum = 0.002,wtagain = 8.,musicdelay = 0.010,bgain = 1.,wegain = 1.,wigain = 14.,
-    tauzi = 0.004,tauzj = 0.004,taue = 0.004,taup = 10.,noise = 0.,lgbias = 0.,
-    dmax = 16,da = tauzi,dq = 2.;
+float taum = 0.002,wtagain = 8.,musicdelay = 0.010,momobgain = 1.,momowegain = 1.,momowigain = -14.,
+    semobgain = 1.,semowgain = 1.,tauzi = 0.004,tauzj = 0.004,taue = 0.004,taup = 10.,noise = 0.,
+    lgbias = 0.,dmax = 16,da = tauzi,dq = 2.,time1 = 1.e6,time2 = 1.e6,time3 = 1.e6;
 
 string paramfile = "params_3.par";
 
-SensoryMotorPop *semopop;
-PrjD *semoprj;
+SensorPop *sepop;
+MotorPop *mopop;
+PrjD *momoprj;
+Prj11 *semoprj;
 
 vector<int> tapsvec;
 vector<float> tauzivec;
@@ -51,15 +53,20 @@ void parseparams(string paramfile) {
     pp->postparam("tauzj",&tauzj,Parseparam::Float);
     pp->postparam("taue",&taue,Parseparam::Float);
     pp->postparam("taup",&taup,Parseparam::Float);
-    pp->postparam("bgain",&bgain,Parseparam::Float);
-    pp->postparam("wegain",&wegain,Parseparam::Float);
-    pp->postparam("wigain",&wigain,Parseparam::Float);
+    pp->postparam("momobgain",&momobgain,Parseparam::Float);
+    pp->postparam("momowegain",&momowegain,Parseparam::Float);
+    pp->postparam("momowigain",&momowigain,Parseparam::Float);
+    pp->postparam("semobgain",&semobgain,Parseparam::Float);
+    pp->postparam("semowgain",&semowgain,Parseparam::Float);
     pp->postparam("dn",&dn,Parseparam::Int);
     pp->postparam("da",&da,Parseparam::Float);
     pp->postparam("dmax",&dmax,Parseparam::Float);
     pp->postparam("dq",&dq,Parseparam::Float);
     pp->postparam("nldot",&nldot,Parseparam::Int);
     pp->postparam("nstep",&nstep,Parseparam::Int);
+    pp->postparam("time1",&time1,Parseparam::Float);
+    pp->postparam("time2",&time2,Parseparam::Float);
+    pp->postparam("time3",&time3,Parseparam::Float);
 
     pp->doparse();
 }
@@ -85,19 +92,20 @@ void mkdelay(float d0,float dmax,float a,int n,float q) {
 	tauzivec[i] = q * (a + d0*c*exp(c*i));
     }
 //     if (ISROOT) {
-// 	printf("a = %.4f c = %.4f q = %.4f\n",a,c,q);
+// 	fprintf(stderr,"a = %.4f c = %.4f q = %.4f\n",a,c,q);
 // 	for (int i=0; i<n; i++)
-// 	    printf("%.4f %.4f\n",tapsvec[i]*Globals::_dt,tauzivec[i]);
+// 	    fprintf(stderr,"%.4f %.4f\n",tapsvec[i]*Globals::_dt,tauzivec[i]);
 //     }
 }
 
 void setuplogging() {
-    new PopLogger(semopop,"semolgi.log",Pop::LGI);
-    new PopLogger(semopop,"semowsu.log",Pop::WSU);
-    new PopLogger(semopop,"semodsu.log",Pop::DSU);
-    new PopLogger(semopop,"semoact.log",Pop::ACT);
-    //    new PrjLogger(semoprj,"semoprn.log",Prj::PRN);
-    //    new PrjLogger(semoprj,"semopj.log",Prj::PJ,100);
+    new PopLogger(sepop,"selgi.log",Pop::LGI);
+    new PopLogger(sepop,"seact.log",Pop::ACT);
+
+    new PopLogger(mopop,"semowsu.log",Pop::WSU);
+    new PopLogger(mopop,"semodsu.log",Pop::DSU);
+    new PopLogger(mopop,"semoact.log",Pop::ACT);
+
 }
 
 void doprinting() {
@@ -116,32 +124,41 @@ int main(int argc, char** argv) {
   Globals::init(argc,argv);
   Globals::setdt(0.001);
 
-<<<<<<< HEAD
-  SensorPop* sensorpop = new SensorPop("sensorpool", 0.010, 1, 1, 88, 0.010, 0.0); 
-  MotorPop* motorpop = new MotorPop("motorpool", 0.010, 1, 1, 88, 0.010, 0.0); 
-    
-  Globals::start();
-
-=======
   parseparams(paramfile);
 
-  semopop = new SensoryMotorPop("sensoryinput","motoroutput",musicdelay,nrank,H,U,taum); 
-  semopop->setnormtype(Pop::NONE);
-  semopop->setwtagain(wtagain);
+  sepop = new SensorPop("sensoryinput",musicdelay,nrank,H,U,taum); 
+  sepop->setnormtype(Pop::NONE);
+  sepop->setwtagain(1.);
+
+  mopop = new MotorPop("motoroutput",musicdelay,nrank,H,U,taum); 
+  mopop->setnormtype(Pop::NONE);
+  mopop->setwtagain(wtagain);
     
   mkdelay(tauzi,dmax,da,dn,dq);
 
   int n = tapsvec.size();
 
-  semoprj = new PrjD(semopop,semopop,tapsvec,tauzivec,tauzj,taue,taup);
-  semoprj->setselfconn(true,true,true);
-  semoprj->reinit(0.);
+  momoprj = new PrjD(mopop,mopop,tapsvec,tauzivec,tauzj,taue,taup);
+  momoprj->setselfconn(true,true,true);
+  momoprj->reinit();
+
+  semoprj = new Prj11(sepop,mopop,tauzi,tauzj,taue,taup);
+  semoprj->reinit();
+
+  if (ISROOT) std::cerr << "music simtime = " << Globals::_musicstoptime << std::endl;
+  if (ISROOT) std::cerr << "music timestep = " << Globals::_musictimestep << std::endl;
+
+  float k = (float)n/16.;
+  momowegain /= k; momowigain /= k;
 
   MPI_Barrier(Globals::_comm_world);
+
   if (ISROOT) {
       fprintf(stderr,"H = %d U = %d taum = %.3f ",H,U,taum);
-      fprintf(stderr,"taup = %.3f sec bgain = %.4f wegain = %.4f wigain = %.4f n = %d\n",
-	      taup,bgain,wegain,wigain,n);
+      fprintf(stderr,"taup = %.3f sec semobgain = %.4f semowgain = %.4f ",
+	      taup,semobgain,semowgain,n);
+      fprintf(stderr,"momobgain = %.4f momowegain = %.4f momowigain = %.4f n = %d\n",
+	      taup,momobgain,momowegain,momowigain,n);
   }
   MPI_Barrier(Globals::_comm_world);
   
@@ -149,83 +166,54 @@ int main(int argc, char** argv) {
 
   if (ISROOT) std::cerr << "Setup done!" << std::endl;
 
-  semoprj->setbgain(bgain);
-  semoprj->setwegain(wegain);
-  semoprj->setwigain(wigain);
+  //  sepop->setiwgain(1.);
 
-  float inent,inlike; int inon;
-  semopop->setigain(1.);
-  semopop->setwgain(0.);
+  mopop->setiwgain(0.);
+  momoprj->setbgain(0.);
+  momoprj->setwegain(0.);
+  momoprj->setwigain(0.);
+  momoprj->setprn(1.);
+
+  semoprj->setbwgain(semobgain); semoprj->setwgain(semowgain);
   semoprj->setprn(1.);
 
-  if (ISROOT) std::cerr << "Running with music input " << std::endl;
 
-  // Main simulation loop
-  while (Globals::_musicruntime->time() < Globals::_musicstoptime)
-    Globals::updstateall();
-
-  if (ISROOT)
-    std::cerr << "Done!" << std::endl;
-
-  if (ISROOT) std::cerr << "music simtime = " << Globals::_musicstoptime << std::endl;
-  if (ISROOT) std::cerr << "music timestep = " << Globals::_musictimestep << std::endl;
+  if (ISROOT) std::cerr << "music simtime = " << Globals::_musicstoptime << " sec" << std::endl;
+  if (ISROOT) std::cerr << "music timestep = " << Globals::_musictimestep << " sec" << std::endl;
   idur = (Globals::_musictimestep+Globals::_dt)/Globals::_dt;
 
   Globals::setnldot(nldot);
 
-  int simstep = 0;
-  vector<float> igainv(H,1);
-  for (int i=0; i<H; i++) if (i>H/2) igainv[i] = 0.;
-
   Globals::start();
 
-  for (int simt=0; Globals::_musicruntime->time() < Globals::_musicstoptime; simt++) {
-      simstep = Globals::_simstep;
-      inent = semopop->inentropy();
-      inlike = semopop->inlikelihood();
-      inon = semopop->inon();
-      MPI_Bcast(&inon,1,MPI_FLOAT,0,Globals::_comm_world);
-
-      if (ISROOT)
-	  fprintf(outf,"%8d %15.6f %15.6f %4d\n",simstep,inent,inlike,inon);
-      if (inon>0) {
-	  semopop->setwgain(0);
-	  semoprj->setprn(1.);
-      } else {
-	  semopop->setwgain(1.);
+  for (double simtime=0.; Globals::_musicruntime->time() < Globals::_musicstoptime;
+       simtime+=Globals::_musictimestep) {
+      if (simtime>time1) {
 	  semoprj->setprn(0.);
+ 	  momoprj->setprn(0.);
+	  momoprj->setbgain(momobgain); momoprj->setwegain(momowegain); momoprj->setwigain(momowigain);
       }
-      if (simstep>4000 and simstep<6000) {
-	  semoprj->setprn(0.);
-	  semopop->setigain(0.);
-	  semopop->setwgain(1.);
+      if (simtime>time2) {
+	  momoprj->setbgain(0.); momoprj->setwegain(0.); momoprj->setwigain(0.);
       }
-      if (simstep>6000 and simstep<9000) {
-	  semoprj->setprn(0.);
-	  semopop->setigain(0.);
-	  semoprj->setwgain(0.);
+      if (simtime>time3) {
+	  momoprj->setbgain(momobgain); momoprj->setwegain(momowegain); momoprj->setwigain(momowigain);
       }
-      if (simstep>9000) {
-	  semoprj->setprn(0.);
-	  semopop->setigain(igainv);
-	  semoprj->setwgain(1.);
-      }
-
       for (int step=0; step<idur; step++) Globals::updstateall();
   }
 
   Globals::stop();
 
-  fclose(outf);
-    
   MPI_Barrier(Globals::_comm_world);
     
   doprinting();
 
   Globals::report();
     
-  new PrjPrinter(semoprj,"semobj.bin",Prj::BJ);
-  new PrjPrinter(semoprj,"semowij.bin",Prj::WIJ);
+  new PrjPrinter(semoprj,"momobj.bin",Prj::BJ);
+  new PrjPrinter(semoprj,"momowij.bin",Prj::WIJ);
+  new PrjPrinter(momoprj,"semobj.bin",Prj::BJ);
+  new PrjPrinter(momoprj,"semowij.bin",Prj::WIJ);
 
   Globals::finish();
 
