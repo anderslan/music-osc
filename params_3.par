@@ -3,28 +3,26 @@ H                   8
 U                  11
 normtyp          NONE # HALF
 taum                0.002
-wtagain             8.
+wtagain            16.
 lgbias              0.
 noise               0 # 0.005
 
 momobgain           1.
-momowegain          0.2 # See scaling in pbcpnn/apps/timedsequence2
-momowigain          8.
+momowegain          0.20
+momowigain         16.
 
-semobgain           2.
-semowgain           2.
+semobgain          1.
+semowgain          1.
 
 da                  0. # 0.005 # a = 0 ==> linear delaytaps
 dmax                2.000
-dn                100
-dq                  0.1
+dn                 50
+dq                  0.05
 
 tauzi               0.002
 tauzj               0.002
 taue                0.002
 taup               10.
 
-nldot             100
-time1               4.0
-time2               6.0
-time3               8.0
+nldot            1000
+dolog            true

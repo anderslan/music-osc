@@ -11,9 +11,9 @@ import Displ
 
 def displ1(r0 = 0,r1 = -1,u0 = 0,u1 = -1,fig = 1) :
     sact = Displ.fromfile("seact.log",N=88)
-    wsu = Displ.fromfile("semowsu.log",N=88)
-    dsu = Displ.fromfile("semodsu.log",N=88)
-    mact = Displ.fromfile("semoact.log",N=88)
+    wsu = Displ.fromfile("mowsu.log",N=88)
+    dsu = Displ.fromfile("modsu.log",N=88)
+    mact = Displ.fromfile("moact.log",N=88)
     plt.figure(fig)
     ax1 = plt.subplot(1,3,1)
     Displ.imshow(sact,axes=ax1,r0 = r0,r1 = r1,u0 = u0,u1 = u1)

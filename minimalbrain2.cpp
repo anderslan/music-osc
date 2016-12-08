@@ -26,7 +26,9 @@ using namespace std;
 int nrank = 8,H = 8,U = 88/H,dn = 40,nstep = 100,idur = 50,nldot = 0;
 float taum = 0.002,wtagain = 8.,musicdelay = 0.010,momobgain = 1.,momowegain = 1.,momowigain = -14.,
     semobgain = 1.,semowgain = 1.,tauzi = 0.004,tauzj = 0.004,taue = 0.004,taup = 10.,noise = 0.,
-    lgbias = 0.,dmax = 16,da = tauzi,dq = 2.,time1 = 1.e6,time2 = 1.e6,time3 = 1.e6;
+    lgbias = 0.,dmax = 16,da = tauzi,dq = 2.,time1 = 1.e6,time2 = 1.e6,time3 = 1.e6,time4 = 1.e6,
+    time5 = 1.e6;
+bool dolog = true;
 
 string paramfile = "params_3.par";
 
@@ -48,6 +50,7 @@ void parseparams(string paramfile) {
     pp->postparam("noise",&noise,Parseparam::Float);
     pp->postparam("wtagain",&wtagain,Parseparam::Float);
     pp->postparam("lgbias",&lgbias,Parseparam::Float);
+    pp->postparam("dolog",&dolog,Parseparam::Bool);
 
     pp->postparam("tauzi",&tauzi,Parseparam::Float);
     pp->postparam("tauzj",&tauzj,Parseparam::Float);
@@ -67,6 +70,8 @@ void parseparams(string paramfile) {
     pp->postparam("time1",&time1,Parseparam::Float);
     pp->postparam("time2",&time2,Parseparam::Float);
     pp->postparam("time3",&time3,Parseparam::Float);
+    pp->postparam("time4",&time4,Parseparam::Float);
+    pp->postparam("time5",&time5,Parseparam::Float);
 
     pp->doparse();
 }
@@ -102,21 +107,37 @@ void setuplogging() {
     new PopLogger(sepop,"selgi.log",Pop::LGI);
     new PopLogger(sepop,"seact.log",Pop::ACT);
 
-    new PopLogger(mopop,"semowsu.log",Pop::WSU);
-    new PopLogger(mopop,"semodsu.log",Pop::DSU);
-    new PopLogger(mopop,"semoact.log",Pop::ACT);
-
+    new PopLogger(mopop,"mowsu.log",Pop::WSU);
+    new PopLogger(mopop,"moact.log",Pop::ACT);
 }
 
 void doprinting() {
+  new PrjPrinter(semoprj,"semobj.bin",Prj::BJ);
+  new PrjPrinter(semoprj,"semowij.bin",Prj::WIJ);
+  new PrjPrinter(momoprj,"momobj.bin",Prj::BJ);
+  new PrjPrinter(momoprj,"momowij.bin",Prj::WIJ);
 }
 
-float calciwgain(float inent,float inlike) {
-    float iwgain;
-    if (ISROOT)
-	fprintf(stderr,"%8d %15.6f %15.6f\n",Globals::_simstep,inent,inlike);
-    //    if (inent>0) iwgain = 0.; else iwgain =  1. - exp(inlike);
-    return iwgain;
+enum BrainMode { RELAX, LEARN, RECALL, COMPLETE } ;
+
+void setmode(BrainMode brainmode) {
+    switch (brainmode) {
+	break;
+    case RELAX:
+	semoprj->setprn(0.);
+	momoprj->setprn(0.);
+	momoprj->setbgain(0.); momoprj->setwegain(0.); momoprj->setwigain(0.);
+	break;
+    case LEARN:
+	semoprj->setprn(1.);
+	momoprj->setprn(1.);
+	momoprj->setbgain(0.); momoprj->setwegain(0.); momoprj->setwigain(0.);
+	break;
+    case RECALL:
+	semoprj->setprn(0.);
+	momoprj->setprn(0.);
+	momoprj->setbgain(momobgain); momoprj->setwegain(momowegain); momoprj->setwigain(momowigain);
+    }
 }
 
 int main(int argc, char** argv) {
@@ -133,11 +154,13 @@ int main(int argc, char** argv) {
   mopop = new MotorPop("motoroutput",musicdelay,nrank,H,U,taum); 
   mopop->setnormtype(Pop::NONE);
   mopop->setwtagain(wtagain);
+  mopop->setiwgain(0.);
     
   mkdelay(tauzi,dmax,da,dn,dq);
 
   int n = tapsvec.size();
 
+  //  momoprj = new Prj(mopop,mopop,tauzi,tauzj,taue,taup);
   momoprj = new PrjD(mopop,mopop,tapsvec,tauzivec,tauzj,taue,taup);
   momoprj->setselfconn(true,true,true);
   momoprj->reinit();
@@ -158,17 +181,16 @@ int main(int argc, char** argv) {
       fprintf(stderr,"taup = %.3f sec semobgain = %.4f semowgain = %.4f ",
 	      taup,semobgain,semowgain,n);
       fprintf(stderr,"momobgain = %.4f momowegain = %.4f momowigain = %.4f n = %d\n",
-	      taup,momobgain,momowegain,momowigain,n);
+	      momobgain,momowegain,momowigain,n);
   }
   MPI_Barrier(Globals::_comm_world);
   
-  setuplogging();
+  if (dolog) setuplogging();
 
   if (ISROOT) std::cerr << "Setup done!" << std::endl;
 
-  //  sepop->setiwgain(1.);
+  sepop->setiwgain(1.);
 
-  mopop->setiwgain(0.);
   momoprj->setbgain(0.);
   momoprj->setwegain(0.);
   momoprj->setwigain(0.);
@@ -188,17 +210,16 @@ int main(int argc, char** argv) {
 
   for (double simtime=0.; Globals::_musicruntime->time() < Globals::_musicstoptime;
        simtime+=Globals::_musictimestep) {
-      if (simtime>time1) {
-	  semoprj->setprn(0.);
- 	  momoprj->setprn(0.);
-	  momoprj->setbgain(momobgain); momoprj->setwegain(momowegain); momoprj->setwigain(momowigain);
-      }
-      if (simtime>time2) {
-	  momoprj->setbgain(0.); momoprj->setwegain(0.); momoprj->setwigain(0.);
-      }
-      if (simtime>time3) {
-	  momoprj->setbgain(momobgain); momoprj->setwegain(momowegain); momoprj->setwigain(momowigain);
-      }
+
+      if (simtime>0. and simtime<4.) setmode(LEARN);
+      if (simtime>4. and simtime<7.) setmode(RECALL);
+      if (simtime>7. and simtime<10.) setmode(RELAX);
+      if (simtime>10. and simtime<17.) setmode(RECALL);
+      if (simtime>17. and simtime<21.) setmode(LEARN);
+      if (simtime>21. and simtime<24.) setmode(RECALL);
+      if (simtime>24. and simtime<25.) setmode(RELAX);
+      if (simtime>25. and simtime<100.) setmode(RECALL);
+
       for (int step=0; step<idur; step++) Globals::updstateall();
   }
 
@@ -210,11 +231,6 @@ int main(int argc, char** argv) {
 
   Globals::report();
     
-  new PrjPrinter(semoprj,"momobj.bin",Prj::BJ);
-  new PrjPrinter(semoprj,"momowij.bin",Prj::WIJ);
-  new PrjPrinter(momoprj,"semobj.bin",Prj::BJ);
-  new PrjPrinter(momoprj,"semowij.bin",Prj::WIJ);
-
   Globals::finish();
 
   return 0;
