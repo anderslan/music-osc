@@ -98,6 +98,12 @@ def mkdata3(outasciifile = None,u0 = -1) :
         np.savetxt(outasciifile,alldata,fmt = "%1d")
     return alldata
 
+def mkdata4(outasciifile = None) :
+    alldata = mkmusicdata("bwv772_100Hz.txt",r1 = 800)
+    if outasciifile!=None :
+        np.savetxt(outasciifile,alldata,fmt = "%1d")
+    return alldata
+
 def mkgliss(outasciifile = None) :
     data = np.zeros((2000,88),np.float32)
     for n in range(2000) :

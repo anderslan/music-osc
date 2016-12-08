@@ -88,7 +88,7 @@ void mkdelay(float d0,float dmax,float a,int n,float q) {
 	c = 0;
     } else if (dmax<d0 + n*a) {
 	if (ISROOT) fprintf(stderr,"dmax = %f d0 = %f n = %d a = %f\n",dmax,d0,n,a);
-	Utils::mpierror("main","Illegal dmax<d0+n*a");
+	Utils::mpierror("main::mkdelay","Illegal dmax<d0+n*a");
     } else
 	//	c = 1./n * log((dmax - d0)/d0);
 	c = 0.;
@@ -206,11 +206,14 @@ int main(int argc, char** argv) {
 
   Globals::setnldot(nldot);
 
+#define DATA4
+
   Globals::start();
 
   for (double simtime=0.; Globals::_musicruntime->time() < Globals::_musicstoptime;
        simtime+=Globals::_musictimestep) {
 
+#ifdef DATA3 
       if (simtime>0. and simtime<4.) setmode(LEARN);
       if (simtime>4. and simtime<7.) setmode(RECALL);
       if (simtime>7. and simtime<10.) setmode(RELAX);
@@ -219,7 +222,10 @@ int main(int argc, char** argv) {
       if (simtime>21. and simtime<24.) setmode(RECALL);
       if (simtime>24. and simtime<25.) setmode(RELAX);
       if (simtime>25. and simtime<100.) setmode(RECALL);
-
+#endif
+#ifdef DATA4
+      if (simtime>0. and simtime<100.) setmode(LEARN);
+#endif
       for (int step=0; step<idur; step++) Globals::updstateall();
   }
 
