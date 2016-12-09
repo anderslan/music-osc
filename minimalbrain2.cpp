@@ -229,13 +229,10 @@ int main(int argc, char** argv) {
 	  break;
       case 10:
 	  inon = sepop->inon();
-	  if (inon==0) {
-	      if (ISROOT) fprintf(stderr,"R");
+	  if (inon==0)
 	      setmode(RECALL);
-	  } else {
-	      if (ISROOT) fprintf(stderr,"L");
+	  else
 	      setmode(LEARN);
-	  }
 	  break;
       case 100:
 	  if (simtime>0. and simtime<4.) setmode(LEARN);
