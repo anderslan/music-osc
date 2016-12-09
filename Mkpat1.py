@@ -83,7 +83,7 @@ def mkdata2(outasciifile = None,u0 = -1) :
         np.savetxt(outasciifile,alldata,fmt = "%1d")
     return alldata
 
-def mkdata3(outasciifile = None,u0 = -1) :
+def mkdata3(outasciifile = None,u0 = -1,c1 = -1) :
     alldata1 = mkmusicdata("bwv772_100Hz.txt",r1 = 100,nrepeat = 14)
     alldata1 = blankmusicdata(alldata1,r0 = 400,r1=900)
     if u0<0 : u0 = alldata1.shape[1]
@@ -91,7 +91,8 @@ def mkdata3(outasciifile = None,u0 = -1) :
     alldata2 = mkmusicdata("bwv772_100Hz.txt",r0 = 100,r1=200,nrepeat = 12)
     alldata2 = blankmusicdata(alldata2,r1 = 300)
     alldata2 = blankmusicdata(alldata2,r0 = 700)
-    alldata3 = mkmusicdata("bwv772_100Hz.txt",r1 = 100,nrepeat = 5,c1=u0)
+    if c1<0 : c1 = alldata1.shape[1]
+    alldata3 = mkmusicdata("bwv772_100Hz.txt",r1 = 100,nrepeat = 5,c1=c1)
     alldata3 = blankmusicdata(alldata3,r0 = 300)
     alldata = mergemusicdata([alldata1,alldata2,alldata3])
     if outasciifile!=None :

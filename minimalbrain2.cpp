@@ -23,11 +23,10 @@
 
 using namespace std;
 
-int nrank = 8,H = 8,U = 88/H,dn = 40,nstep = 100,idur = 50,nldot = 0;
+int nrank = 8,H = 8,U = 88/H,dn = 40,idur = 50,nldot = 0,ctlmode = 0;
 float taum = 0.002,wtagain = 8.,musicdelay = 0.010,momobgain = 1.,momowegain = 1.,momowigain = -14.,
     semobgain = 1.,semowgain = 1.,tauzi = 0.004,tauzj = 0.004,taue = 0.004,taup = 10.,noise = 0.,
-    lgbias = 0.,dmax = 16,da = tauzi,dq = 2.,time1 = 1.e6,time2 = 1.e6,time3 = 1.e6,time4 = 1.e6,
-    time5 = 1.e6;
+    lgbias = 0.,dmax = 16,da = tauzi,dq = 2.,motaua = 1.,moadampl = 0.;
 bool dolog = true;
 
 string paramfile = "params_3.par";
@@ -66,17 +65,14 @@ void parseparams(string paramfile) {
     pp->postparam("dmax",&dmax,Parseparam::Float);
     pp->postparam("dq",&dq,Parseparam::Float);
     pp->postparam("nldot",&nldot,Parseparam::Int);
-    pp->postparam("nstep",&nstep,Parseparam::Int);
-    pp->postparam("time1",&time1,Parseparam::Float);
-    pp->postparam("time2",&time2,Parseparam::Float);
-    pp->postparam("time3",&time3,Parseparam::Float);
-    pp->postparam("time4",&time4,Parseparam::Float);
-    pp->postparam("time5",&time5,Parseparam::Float);
+    pp->postparam("ctlmode",&ctlmode,Parseparam::Int);
+    pp->postparam("motaua",&motaua,Parseparam::Float);
+    pp->postparam("moadampl",&moadampl,Parseparam::Float);
 
     pp->doparse();
 }
 
-void mkdelay(float d0,float dmax,float a,int n,float q) {
+void mkdelay(float d0,float dmax,float a,int n,float q,bool doprn = false) {
     float dt = Globals::_dt,c;
     tapsvec = vector<int>(n);
     tauzivec = vector<float>(n);
@@ -96,11 +92,11 @@ void mkdelay(float d0,float dmax,float a,int n,float q) {
 	tapsvec[i] = ((a*i + d0*exp(c*i)) + dt/2)/dt;
 	tauzivec[i] = q * (a + d0*c*exp(c*i));
     }
-//     if (ISROOT) {
-// 	fprintf(stderr,"a = %.4f c = %.4f q = %.4f\n",a,c,q);
-// 	for (int i=0; i<n; i++)
-// 	    fprintf(stderr,"%.4f %.4f\n",tapsvec[i]*Globals::_dt,tauzivec[i]);
-//     }
+    if (doprn and ISROOT) {
+	fprintf(stderr,"a = %.4f c = %.4f q = %.4f\n",a,c,q);
+	for (int i=0; i<n; i++)
+	    fprintf(stderr,"%.4f %.4f\n",tapsvec[i]*Globals::_dt,tauzivec[i]);
+    }
 }
 
 void setuplogging() {
@@ -108,7 +104,9 @@ void setuplogging() {
     new PopLogger(sepop,"seact.log",Pop::ACT);
 
     new PopLogger(mopop,"mowsu.log",Pop::WSU);
+    new PopLogger(mopop,"modsu.log",Pop::DSU);
     new PopLogger(mopop,"moact.log",Pop::ACT);
+    new PopLogger(mopop,"moada.log",Pop::ADA);
 }
 
 void doprinting() {
@@ -118,7 +116,7 @@ void doprinting() {
   new PrjPrinter(momoprj,"momowij.bin",Prj::WIJ);
 }
 
-enum BrainMode { RELAX, LEARN, RECALL, COMPLETE } ;
+enum BrainMode { RELAX, LEARN, RECALL } ;
 
 void setmode(BrainMode brainmode) {
     switch (brainmode) {
@@ -127,16 +125,19 @@ void setmode(BrainMode brainmode) {
 	semoprj->setprn(0.);
 	momoprj->setprn(0.);
 	momoprj->setbgain(0.); momoprj->setwegain(0.); momoprj->setwigain(0.);
+	mopop->setadapt(motaua,0.);
 	break;
     case LEARN:
 	semoprj->setprn(1.);
 	momoprj->setprn(1.);
 	momoprj->setbgain(0.); momoprj->setwegain(0.); momoprj->setwigain(0.);
+	mopop->setadapt(motaua,0.);
 	break;
     case RECALL:
 	semoprj->setprn(0.);
 	momoprj->setprn(0.);
 	momoprj->setbgain(momobgain); momoprj->setwegain(momowegain); momoprj->setwigain(momowigain);
+	mopop->setadapt(motaua,moadampl);
     }
 }
 
@@ -206,27 +207,51 @@ int main(int argc, char** argv) {
 
   Globals::setnldot(nldot);
 
-#define DATA4
+  float simtime; int inon;
+
+#define DATA3
 
   Globals::start();
 
-  for (double simtime=0.; Globals::_musicruntime->time() < Globals::_musicstoptime;
-       simtime+=Globals::_musictimestep) {
+  while (Globals::_musicruntime->time() < Globals::_musicstoptime ) {
 
-#ifdef DATA3 
-      if (simtime>0. and simtime<4.) setmode(LEARN);
-      if (simtime>4. and simtime<7.) setmode(RECALL);
-      if (simtime>7. and simtime<10.) setmode(RELAX);
-      if (simtime>10. and simtime<17.) setmode(RECALL);
-      if (simtime>17. and simtime<21.) setmode(LEARN);
-      if (simtime>21. and simtime<24.) setmode(RECALL);
-      if (simtime>24. and simtime<25.) setmode(RELAX);
-      if (simtime>25. and simtime<100.) setmode(RECALL);
-#endif
-#ifdef DATA4
-      if (simtime>0. and simtime<100.) setmode(LEARN);
-#endif
-      for (int step=0; step<idur; step++) Globals::updstateall();
+      simtime = Globals::_simtime;
+
+      switch (ctlmode) {
+      case 0:
+	  if (simtime>0. and simtime<100.) setmode(RELAX);
+	  break;
+      case 1:
+	  if (simtime>0. and simtime<100.) setmode(LEARN);
+	  break;
+      case 2:
+	  if (simtime>0. and simtime<100.) setmode(RECALL);
+	  break;
+      case 10:
+	  inon = sepop->inon();
+	  if (inon==0) {
+	      if (ISROOT) fprintf(stderr,"R");
+	      setmode(RECALL);
+	  } else {
+	      if (ISROOT) fprintf(stderr,"L");
+	      setmode(LEARN);
+	  }
+	  break;
+      case 100:
+	  if (simtime>0. and simtime<4.) setmode(LEARN);
+	  if (simtime>4. and simtime<7.) setmode(RECALL);
+	  if (simtime>7. and simtime<10.) setmode(RELAX);
+	  if (simtime>10. and simtime<16.) setmode(RECALL);
+	  if (simtime>16. and simtime<17.) setmode(RELAX);
+	  if (simtime>17. and simtime<21.) setmode(LEARN);
+	  if (simtime>21. and simtime<24.) setmode(RECALL);
+	  if (simtime>24. and simtime<26.) setmode(RELAX);
+	  if (simtime>26. and simtime<100.) setmode(RECALL);
+	  break;
+      default: Utils::mpierror("main::mkdelay","Illegal ctlmode");
+      }
+
+      Globals::updstateall();
   }
 
   Globals::stop();

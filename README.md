@@ -69,3 +69,21 @@ How to run on osc test milner
   salloc -N 3
   aprun -n 1 ./sim.sh : -n 1 ./oscin.sh : -n 1 ./oscout.sh
   exit
+
+How to run minimalbrain2 on milner, using filetobrain and braintofile
+
+  The control of the parameters and mode of minimalbrain2 is via the
+  parameter file params_3.par which is read during startup. Most
+  importantly the mode of the program is set by ctrlmode, currently to
+  { 0, 1, 2, 10, 100 }. 10 is the most promising mode at the moment,
+  and should allow some kind of interactive runs.
+
+  The version of minimaltest is minimaltest4.music. Use salloc and
+  aprun e.g. like:
+
+  salloc -N 5 -t 1:00:00
+  aprun -n 1 ./source.sh : -n 1 ./sink.sh : -n 88 ./brain.sh
+
+  Logging can be turned on and off from params_3.par. Note that logging slows down a bit.
+  
+
