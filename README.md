@@ -81,9 +81,13 @@ How to run minimalbrain2 on milner, using filetobrain and braintofile
   The version of minimaltest is minimaltest4.music. Use salloc and
   aprun e.g. like:
 
-  salloc -N 5 -t 1:00:00
-  aprun -n 1 ./source.sh : -n 1 ./sink.sh : -n 88 ./brain.sh
+  salloc -N 6 -t 1:00:00
+  aprun -n 1 ./source.sh : -n 1 ./sink.sh : -n 152 ./brain.sh
 
-  Logging can be turned on and off from params_3.par. Note that logging slows down a bit.
+  Logging can be turned on and off from params_3.par. Note that
+  logging slows down a bit.
   
-
+  There are now minitest01.music and minitest02.music that
+  demonstrates pattern replay as well as completion ok. NOTE 1 that
+  the number of nodes needed is now 6. Also you need to checkout the
+  pbcpnn branch ala_changes for now

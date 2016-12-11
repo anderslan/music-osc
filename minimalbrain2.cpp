@@ -24,16 +24,17 @@
 using namespace std;
 
 int nrank = 8,H = 8,U = 88/H,dn = 40,idur = 50,nldot = 0,ctlmode = 0;
-float taum = 0.002,wtagain = 8.,musicdelay = 0.010,momobgain = 1.,momowegain = 1.,momowigain = -14.,
+float taum = 0.002,wtagain = 8.,musicdelay = 0.010,momobgain = 1.,momowegain = 1.,momowigain = 14.,
     semobgain = 1.,semowgain = 1.,tauzi = 0.004,tauzj = 0.004,taue = 0.004,taup = 10.,noise = 0.,
-    lgbias = 0.,dmax = 16,da = tauzi,dq = 2.,motaua = 1.,moadampl = 0.;
-bool dolog = true;
+    lgbias = 0.,dmax = 16,da = tauzi,dq = 2.,motaua = 1.,moadampl = 0.,learntime = 4.;
+bool dolog = true,doprn = true;
+int selgilogstep = 0,seactlogstep = 1,mowsulogstep = 0,modsulogstep = 0,moactlogstep = 1,moadalogstep = 0;
 
 string paramfile = "params_3.par";
 
 SensorPop *sepop;
 MotorPop *mopop;
-PrjD *momoprj;
+PrjD *momoprj1,*momoprj2;
 Prj11 *semoprj;
 
 vector<int> tapsvec;
@@ -49,7 +50,15 @@ void parseparams(string paramfile) {
     pp->postparam("noise",&noise,Parseparam::Float);
     pp->postparam("wtagain",&wtagain,Parseparam::Float);
     pp->postparam("lgbias",&lgbias,Parseparam::Float);
+
     pp->postparam("dolog",&dolog,Parseparam::Bool);
+    pp->postparam("doprn",&doprn,Parseparam::Bool);
+    pp->postparam("selgilogstep",&selgilogstep,Parseparam::Int);
+    pp->postparam("seactlogstep",&seactlogstep,Parseparam::Int);
+    pp->postparam("mowsulogstep",&mowsulogstep,Parseparam::Int);
+    pp->postparam("modsulogstep",&modsulogstep,Parseparam::Int);
+    pp->postparam("moactlogstep",&moactlogstep,Parseparam::Int);
+    pp->postparam("moadalogstep",&moadalogstep,Parseparam::Int);
 
     pp->postparam("tauzi",&tauzi,Parseparam::Float);
     pp->postparam("tauzj",&tauzj,Parseparam::Float);
@@ -66,79 +75,85 @@ void parseparams(string paramfile) {
     pp->postparam("dq",&dq,Parseparam::Float);
     pp->postparam("nldot",&nldot,Parseparam::Int);
     pp->postparam("ctlmode",&ctlmode,Parseparam::Int);
+    pp->postparam("learntime",&learntime,Parseparam::Float);
     pp->postparam("motaua",&motaua,Parseparam::Float);
     pp->postparam("moadampl",&moadampl,Parseparam::Float);
 
     pp->doparse();
 }
 
-void mkdelay(float d0,float dmax,float a,int n,float q,bool doprn = false) {
-    float dt = Globals::_dt,c;
+void mkdelay(float dmin,float dmax,int n,float tauzi,bool doprn = false) {
+    if (dmax<=dmin)
+	Utils::mpierror("main::mkdelay","Illegal dmax<=dmin");
+    if (n<=0)
+	Utils::mpierror("main::mkdelay","Illegal n<=0");
     tapsvec = vector<int>(n);
     tauzivec = vector<float>(n);
-    if (n==1) {
-	c = 0;
-	a = d0;
-    } else if (a==0) {
-	a = (dmax - d0)/(n-1);
-	c = 0;
-    } else if (dmax<d0 + n*a) {
-	if (ISROOT) fprintf(stderr,"dmax = %f d0 = %f n = %d a = %f\n",dmax,d0,n,a);
-	Utils::mpierror("main::mkdelay","Illegal dmax<d0+n*a");
-    } else
-	//	c = 1./n * log((dmax - d0)/d0);
-	c = 0.;
+    float ds = (dmax - dmin)/n;
     for (int i=0; i<n; i++) {
-	tapsvec[i] = ((a*i + d0*exp(c*i)) + dt/2)/dt;
-	tauzivec[i] = q * (a + d0*c*exp(c*i));
+	tapsvec[i] = (dmin + (i+1)*ds + Globals::_dt/2)/Globals::_dt;
+	tauzivec[i] = tauzi;
     }
     if (doprn and ISROOT) {
-	fprintf(stderr,"a = %.4f c = %.4f q = %.4f\n",a,c,q);
 	for (int i=0; i<n; i++)
 	    fprintf(stderr,"%.4f %.4f\n",tapsvec[i]*Globals::_dt,tauzivec[i]);
     }
 }
 
 void setuplogging() {
-    new PopLogger(sepop,"selgi.log",Pop::LGI);
-    new PopLogger(sepop,"seact.log",Pop::ACT);
+    new PopLogger(sepop,"selgi.log",Pop::LGI,selgilogstep);
+    new PopLogger(sepop,"seact.log",Pop::ACT,seactlogstep);
 
-    new PopLogger(mopop,"mowsu.log",Pop::WSU);
-    new PopLogger(mopop,"modsu.log",Pop::DSU);
-    new PopLogger(mopop,"moact.log",Pop::ACT);
-    new PopLogger(mopop,"moada.log",Pop::ADA);
+    new PopLogger(mopop,"mowsu.log",Pop::WSU,mowsulogstep);
+    new PopLogger(mopop,"modsu.log",Pop::DSU,modsulogstep);
+    new PopLogger(mopop,"moact.log",Pop::ACT,moactlogstep);
+    new PopLogger(mopop,"moada.log",Pop::ADA,moadalogstep);
 }
 
 void doprinting() {
-  new PrjPrinter(semoprj,"semobj.bin",Prj::BJ);
-  new PrjPrinter(semoprj,"semowij.bin",Prj::WIJ);
-  new PrjPrinter(momoprj,"momobj.bin",Prj::BJ);
-  new PrjPrinter(momoprj,"momowij.bin",Prj::WIJ);
+    new PrjPrinter(semoprj,"semobj.bin",Prj::BJ);
+    new PrjPrinter(semoprj,"semowij.bin",Prj::WIJ);
+    new PrjPrinter(momoprj1,"momobj1.bin",Prj::BJ);
+    new PrjPrinter(momoprj1,"momowij1.bin",Prj::WIJ);
+    new PrjPrinter(momoprj2,"momobj2.bin",Prj::BJ);
+    new PrjPrinter(momoprj2,"momowij2.bin",Prj::WIJ);
 }
 
-enum BrainMode { RELAX, LEARN, RECALL } ;
+#define RESETDELAYBUF
+
+enum BrainMode { RESET, LEARN, RECALL } ;
+BrainMode _brainmode = RESET;
 
 void setmode(BrainMode brainmode) {
     switch (brainmode) {
-	break;
-    case RELAX:
-	semoprj->setprn(0.);
-	momoprj->setprn(0.);
-	momoprj->setbgain(0.); momoprj->setwegain(0.); momoprj->setwigain(0.);
+    case RESET:
+	semoprj->setprn(0.); semoprj->setbgain(0.); semoprj->setwgain(0.);
+	momoprj1->setprn(0.); momoprj1->setbgain(0.); momoprj1->setwegain(0.); momoprj1->setwigain(0.);
+	momoprj2->setprn(0.); momoprj2->setbgain(0.); momoprj2->setwegain(0.); momoprj2->setwigain(0.);
+#ifdef RESETDELAYBUF
+	if (brainmode!=_brainmode) {
+	    momoprj1->resetdelaybuf();
+	    momoprj2->resetdelaybuf();
+	}
+#endif
 	mopop->setadapt(motaua,0.);
 	break;
     case LEARN:
-	semoprj->setprn(1.);
-	momoprj->setprn(1.);
-	momoprj->setbgain(0.); momoprj->setwegain(0.); momoprj->setwigain(0.);
+	semoprj->setprn(1.); semoprj->setbgain(1.); semoprj->setwgain(1.);
+	momoprj1->setprn(1.); momoprj1->setbgain(0.); momoprj1->setwegain(0.); momoprj1->setwigain(0.);
+	momoprj2->setprn(1.); momoprj2->setbgain(0.); momoprj2->setwegain(0.); momoprj2->setwigain(0.);
 	mopop->setadapt(motaua,0.);
 	break;
     case RECALL:
-	semoprj->setprn(0.);
-	momoprj->setprn(0.);
-	momoprj->setbgain(momobgain); momoprj->setwegain(momowegain); momoprj->setwigain(momowigain);
+	semoprj->setprn(0.); semoprj->setbgain(1.); semoprj->setwgain(1.);
+	momoprj1->setprn(0.); momoprj1->setbgain(momobgain/2);
+	momoprj1->setwegain(momowegain); momoprj1->setwigain(momowigain);
+	momoprj2->setprn(0.); momoprj2->setbgain(momobgain/2);
+	momoprj2->setwegain(momowegain); momoprj2->setwigain(momowigain);
 	mopop->setadapt(motaua,moadampl);
+	break;
     }
+    _brainmode = brainmode;
 }
 
 int main(int argc, char** argv) {
@@ -157,20 +172,23 @@ int main(int argc, char** argv) {
   mopop->setwtagain(wtagain);
   mopop->setiwgain(0.);
     
-  mkdelay(tauzi,dmax,da,dn,dq);
+  mkdelay(0,dmax/2,dn/2,tauzi);
+  momoprj1 = new PrjD(mopop,mopop,tapsvec,tauzivec,tauzj,taue,taup);
+  momoprj1->setselfconn(true,true,true);
+  momoprj1->reinit();
 
-  int n = tapsvec.size();
+  mkdelay(dmax/2,dmax,dn/2,tauzi);
+  momoprj2 = new PrjD(mopop,mopop,tapsvec,tauzivec,tauzj,taue,taup);
+  momoprj2->setselfconn(true,true,true);
+  momoprj2->reinit();
 
-  //  momoprj = new Prj(mopop,mopop,tauzi,tauzj,taue,taup);
-  momoprj = new PrjD(mopop,mopop,tapsvec,tauzivec,tauzj,taue,taup);
-  momoprj->setselfconn(true,true,true);
-  momoprj->reinit();
-
-  semoprj = new Prj11(sepop,mopop,tauzi,tauzj,taue,taup);
+  semoprj = new Prj11(sepop,mopop,tauzi,tauzj,taue,10.);
   semoprj->reinit();
 
   if (ISROOT) std::cerr << "music simtime = " << Globals::_musicstoptime << std::endl;
   if (ISROOT) std::cerr << "music timestep = " << Globals::_musictimestep << std::endl;
+
+  int n = tapsvec.size();
 
   float k = (float)n/16.;
   momowegain /= k; momowigain /= k;
@@ -192,10 +210,15 @@ int main(int argc, char** argv) {
 
   sepop->setiwgain(1.);
 
-  momoprj->setbgain(0.);
-  momoprj->setwegain(0.);
-  momoprj->setwigain(0.);
-  momoprj->setprn(1.);
+  momoprj1->setbgain(0.);
+  momoprj1->setwegain(0.);
+  momoprj1->setwigain(0.);
+  momoprj1->setprn(1.);
+
+  momoprj2->setbgain(0.);
+  momoprj2->setwegain(0.);
+  momoprj2->setwigain(0.);
+  momoprj2->setprn(1.);
 
   semoprj->setbwgain(semobgain); semoprj->setwgain(semowgain);
   semoprj->setprn(1.);
@@ -219,31 +242,49 @@ int main(int argc, char** argv) {
 
       switch (ctlmode) {
       case 0:
-	  if (simtime>0. and simtime<100.) setmode(RELAX);
+	  setmode(RESET);
 	  break;
       case 1:
-	  if (simtime>0. and simtime<100.) setmode(LEARN);
+	  setmode(LEARN); 
 	  break;
       case 2:
-	  if (simtime>0. and simtime<100.) setmode(RECALL);
+	  setmode(RECALL);
 	  break;
       case 10:
 	  inon = sepop->inon();
-	  if (inon==0)
+	  if (inon==0 or simtime>learntime) {
 	      setmode(RECALL);
-	  else
+	      //	      if (ISROOT) fprintf(stderr,"R:%5.3f:%d\n",simtime,inon);
+	  } else {
 	      setmode(LEARN);
+	      //	      if (ISROOT) fprintf(stderr,"L:%5.3f:%d\n",simtime,inon);
+	  }
 	  break;
-      case 100:
-	  if (simtime>0. and simtime<4.) setmode(LEARN);
-	  if (simtime>4. and simtime<7.) setmode(RECALL);
-	  if (simtime>7. and simtime<10.) setmode(RELAX);
+      case 101:
+	  if (simtime>0. and simtime<learntime) setmode(LEARN);
+	  if (simtime>learntime and simtime<7.) setmode(RECALL);
+	  if (simtime>7. and simtime<10.) setmode(RESET);
 	  if (simtime>10. and simtime<16.) setmode(RECALL);
-	  if (simtime>16. and simtime<17.) setmode(RELAX);
+	  if (simtime>16. and simtime<17.) setmode(RESET);
 	  if (simtime>17. and simtime<21.) setmode(LEARN);
 	  if (simtime>21. and simtime<24.) setmode(RECALL);
-	  if (simtime>24. and simtime<26.) setmode(RELAX);
+	  if (simtime>24. and simtime<26.) setmode(RESET);
 	  if (simtime>26. and simtime<100.) setmode(RECALL);
+	  break;
+      case 102:
+	  if (simtime<learntime) setmode(LEARN);
+	  if (simtime>3. and simtime<5.) setmode(RESET);
+	  if (simtime>5.) setmode(RECALL);
+	  break;
+      case 200:
+	  if (simtime>0. and simtime<10.) setmode(LEARN);
+	  if (simtime>10. and simtime<100.) setmode(RECALL);
+	  break;
+      case 201:
+	  if (simtime>0. and simtime<10. and simtime<learntime) setmode(LEARN);
+	  if ((simtime>10. or simtime>learntime) and simtime<13.5) setmode(RECALL);
+	  if (simtime>13.5 and simtime<13.6) setmode(RESET);
+	  if (simtime>13.6 and simtime<100.) setmode(RECALL);
 	  break;
       default: Utils::mpierror("main::mkdelay","Illegal ctlmode");
       }
@@ -255,7 +296,7 @@ int main(int argc, char** argv) {
 
   MPI_Barrier(Globals::_comm_world);
     
-  doprinting();
+  if (doprn) doprinting();
 
   Globals::report();
     

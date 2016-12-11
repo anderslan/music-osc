@@ -4,21 +4,19 @@ U                  11
 taum                0.002
 wtagain            16.
 lgbias              0.
-noise               0 # 0.005
+noise               0, # 0.05
 
 momobgain           1.
 momowegain          0.4
 momowigain         16.
 motaua              0.020
-moadampl            8.
+moadampl            0.
 
-semobgain          2.
-semowgain          2.
+semobgain           2.
+semowgain           2.
 
-da                  0. # 0.005 # a = 0 ==> linear delaytaps
 dmax                2.000
-dn                 50
-dq                  0.05
+dn                100
 
 tauzi               0.002
 tauzj               0.002
@@ -26,5 +24,15 @@ taue                0.002
 taup               10.
 
 nldot            1000
-ctlmode           100
-dolog           false
+ctlmode           201
+learntime          10.
+
+dolog            true
+selgilogstep        0
+seactlogstep        1
+mowsulogstep        0
+modsulogstep        0
+moactlogstep        1
+moadalogstep        0
+
+doprn           false

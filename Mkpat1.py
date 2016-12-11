@@ -2,20 +2,50 @@ import sys, os
 import math
 import numpy as np
 import matplotlib.pyplot as plt
+from random import randint
+from numpy.random import poisson
 import scipy.spatial.distance as distance
-from numpy import ma
 import select
 import time
 
 import Displ
 
-def mkmusicdata(inputasciifile = None,predata = None,r0 = 0,r1 = -1,c0 = 0,c1 = -1,
+NCOL = 88
+
+def mkrandtimedpat_(H,U,udur,adur) :
+    if udur<=0 :
+        raise AssertionError("Timedpat.mkrandtimedpat","Illegal udur<=0");
+    if H>1 :
+        timedpats = mkrandtimedpat_(1,U,udur,adur)
+        for h in range(1,H) :
+            timedpat = mkrandtimedpat_(1,U,udur,adur)
+            timedpats = np.concatenate([timedpats,timedpat],1)
+        return timedpats
+    itime = 0
+    timedpat = np.zeros((adur,U),np.float32)
+    while itime<adur :
+        u = randint(0,U-1)
+        dur = poisson(udur)
+        for i in range(0,dur) :
+            if adur<=itime : break;
+            timedpat[itime,u] = 1
+            itime += 1
+    return timedpat
+
+def mkrandtimedpat(H,U,udur,adur,outasciifile = None) :
+    pp = mkrandtimedpat_(H,U,udur,adur)
+    if outasciifile!=None :
+        np.savetxt(outasciifile,pp,fmt = "%1d")
+    return pp
+
+def mkmusicdata(indata,predata = None,r0 = 0,r1 = -1,c0 = 0,c1 = -1,
                 nrepeat = 1,repeatblank = 0,lastblank = 0,fig = -1,outasciifile = None) :
-    NCOL = 88
-    if inputasciifile!=None :
-        indata = np.loadtxt(inputasciifile)
+    if type(indata)==str :
+        indata = np.loadtxt(indata)
         if r1<0 : r1 = indata.shape[0]
         if c1<0 : c1 = indata.shape[1]
+    else :
+        if r1<0 : r1 = indata.shape[0]
 
     predatalen = 0
     if predata!=None :
@@ -27,6 +57,7 @@ def mkmusicdata(inputasciifile = None,predata = None,r0 = 0,r1 = -1,c0 = 0,c1 = 
     utdata[0:predatalen,:] = predata
 
     R = predatalen
+
     for rep in range(nrepeat) :
         for r in range(r0,r1) :
             utdata[R,c0:c1] = indata[r,c0:c1]
@@ -45,16 +76,16 @@ def mkmusicdata(inputasciifile = None,predata = None,r0 = 0,r1 = -1,c0 = 0,c1 = 
 
     return utdata
 
+def blankdata(nrow) :
+    return np.zeros((nrow,NCOL))
+
 def blankmusicdata(indata,r0 = 0,r1 = -1,u0 = 0,u1 = -1,outasciifile = None) :
     if r1<0 : r1 = len(indata)
     if u1<0 : u1 = indata.shape[1]
-    
     data = np.array(indata)
     data[r0:r1,u0:u1] = 0.
-
     if outasciifile!=None :
         np.savetxt(outasciifile,data,fmt = "%1d")
-
     return data
 
 def mergemusicdata(datalist,outasciifile = None) :
@@ -105,12 +136,47 @@ def mkdata4(outasciifile = None) :
         np.savetxt(outasciifile,alldata,fmt = "%1d")
     return alldata
 
-def mkgliss(outasciifile = None) :
-    data = np.zeros((2000,88),np.float32)
-    for n in range(2000) :
-        for i in range(11) :
-            data[n,(n/10+8*i)%88] = 1
+def mkdata5(outasciifile = None) :
+    indata = mkrandtimedpat(2,44,3,100);
+    alldata = mkmusicdata(indata,r1 = 100,nrepeat = 14)
+    alldata = blankmusicdata(alldata,r0 = 400)
     if outasciifile!=None :
-        np.savetxt(outasciifile,data,fmt = "%1d")
-    return data
-        
+        np.savetxt(outasciifile,alldata,fmt = "%1d")
+    return alldata
+
+def mkdata6(outasciifile = None,n = 50,dur = 2,partdur = 100,u0 = 50,nrepeat = 25,
+            blankr0 = 400) :
+    alldata = np.zeros((n*dur,88))
+    for p in range(n*dur) :
+        alldata[p,22 + p/dur] = 1
+        alldata[p,33 + p/dur] = 1
+    alldata = mkmusicdata(alldata,nrepeat = nrepeat)
+    alldata = blankmusicdata(alldata,r0 = blankr0,r1 = 250)
+    alldata = blankmusicdata(alldata,r0 = 1000,r1 = 1500)
+    alldata = blankmusicdata(alldata,r0 = 1100,r1 = 1900 ,u0 = u0)
+    alldata = blankmusicdata(alldata,r0 = 1900)
+    if outasciifile!=None :
+        np.savetxt(outasciifile,alldata,fmt = "%1d")
+    return alldata
+
+def mkdata00(nrow,nrepeat = 5,repeatblank= 20,lastblank = 500,savetofile = False) :
+    alldata = mkmusicdata("bwv772_100Hz.txt",r1 = nrow,nrepeat = nrepeat,repeatblank = repeatblank,
+                          lastblank = lastblank)
+    if savetofile :
+        np.savetxt("data00.txt",alldata,fmt = "%1d")
+    return alldata
+
+def mkdata01(nrow = 200,nrepeat = 5,repeatblank= 20,lastblank = 400,c0 = 0,c1 = 40,savetofile = False) :
+    data1 = mkmusicdata("bwv772_100Hz.txt",r1 = nrow,nrepeat = nrepeat,repeatblank = repeatblank,
+                           lastblank = 500)
+    data2 = mkmusicdata("bwv772_100Hz.txt",r1 = nrow,nrepeat = 2,lastblank = lastblank,c0 = c0,c1 = c1)
+    alldata = mergemusicdata([data1,data2])
+    if savetofile :
+        np.savetxt("data01.txt",alldata,fmt = "%1d")
+    return alldata
+
+def mkdata02(savetofile = False) :
+    alldata = mkdata6(n = 15,dur = 7,u0 = 35)
+    if savetofile :
+        np.savetxt("data02.txt",alldata,fmt = "%1d")
+    return alldata
