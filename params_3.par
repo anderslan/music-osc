@@ -26,6 +26,7 @@ taup               10.
 nldot            1000
 ctlmode           201
 learntime          10.
+trnpat           2000
 
 dolog            true
 selgilogstep        0

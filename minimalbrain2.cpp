@@ -19,20 +19,21 @@
 #include "base/source/Prj11.h"
 #include "base/source/Logger.h"
 #include "utils/Utils.h"
+#include "utils/Patio.h"
 #include "utils/Parseparam.h"
 
 using namespace std;
 
-int nrank = 8,H = 8,U = 88/H,dn = 40,nldot = 0,ctlmode = 0;
+int nrank = 8,H = 8,U = 88/H,dn = 40,nldot = 0,ctlmode = 0,trnpat = -1;
 float taum = 0.002,wtagain = 8.,musicdelay = 0.010,momobgain = 1.,momowegain = 1.,momowigain = 14.,
     semobgain = 1.,semowgain = 1.,tauzi = 0.004,tauzj = 0.004,taue = 0.004,taup = 10.,noise = 0.,
     lgbias = 0.,dmax = 16,da = tauzi,dq = 2.,motaua = 1.,moadampl = 0.,learntime = 4.;
 bool dolog = true,doprn = true;
 int selgilogstep = 0,seactlogstep = 1,mowsulogstep = 0,modsulogstep = 0,moactlogstep = 1,moadalogstep = 0;
 
-string paramfile = "params_3.par";
+string paramfile = "params_3.par",traininfile = "bwv772_100Hz.dat";
 
-SensorPop *sepop;
+SensorPop *sepop,*ctlpop;
 MotorPop *mopop;
 PrjD *momoprj1,*momoprj2;
 Prj11 *semoprj;
@@ -75,6 +76,8 @@ void parseparams(string paramfile) {
     pp->postparam("dq",&dq,Parseparam::Float);
     pp->postparam("nldot",&nldot,Parseparam::Int);
     pp->postparam("ctlmode",&ctlmode,Parseparam::Int);
+    pp->postparam("traininfile",&traininfile,Parseparam::String);
+    pp->postparam("trnpat",&trnpat,Parseparam::Int);
     pp->postparam("learntime",&learntime,Parseparam::Float);
     pp->postparam("motaua",&motaua,Parseparam::Float);
     pp->postparam("moadampl",&moadampl,Parseparam::Float);
@@ -167,6 +170,8 @@ int main(int argc, char** argv) {
   sepop->setnormtype(Pop::NONE);
   sepop->setwtagain(1.);
 
+  //  ctlpop = new SensorPop("controlinput",musicdelay,1,1,3,Globals::_dt); 
+
   mopop = new MotorPop("motoroutput",musicdelay,nrank,H,U,taum); 
   mopop->setnormtype(Pop::NONE);
   mopop->setwtagain(wtagain);
@@ -184,6 +189,8 @@ int main(int argc, char** argv) {
 
   semoprj = new Prj11(sepop,mopop,tauzi,tauzj,taue,10.);
   semoprj->reinit();
+
+  
 
   if (ISROOT) std::cerr << "music simtime = " << Globals::_musicstoptime << std::endl;
 
@@ -232,6 +239,21 @@ int main(int argc, char** argv) {
 #define DATA3
 
   Globals::start();
+
+  /* Read from file here */
+  
+  Patio *patio = new Patio(sepop);
+  int idur;
+  if (patio->checkfile(traininfile)) {
+      if (ISROOT) fprintf(stderr,"Training with infile %s\n",traininfile.c_str());
+      patio->readfile(traininfile,-1,false);
+      idur = (Globals::_musictimestep + Globals::_dt/2)/Globals::_dt;
+      for (int p=0; p<min(trnpat,patio->getnpat()); p++) {
+	  sepop->setlgi(patio->gethypcolpat(p),true);
+	  for (int s=0; s<idur; s++) Globals::updstateall(false);
+      }
+      if (ISROOT) fprintf(stderr," Done!\n");
+  }
 
   while (Globals::_musicruntime->time() < Globals::_musicstoptime ) {
 
