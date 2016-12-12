@@ -1,6 +1,6 @@
 /***********************************************************************************
    Created: 2016-09-28
-   Modified: 2016-11-24
+   Modified: 2016-12-12
    Authors: Anders Lansner, Örjan Ekeberg
 ************************************************************************************/
 
@@ -23,7 +23,7 @@
 
 using namespace std;
 
-int nrank = 8,H = 8,U = 88/H,dn = 40,idur = 50,nldot = 0,ctlmode = 0;
+int nrank = 8,H = 8,U = 88/H,dn = 40,nldot = 0,ctlmode = 0;
 float taum = 0.002,wtagain = 8.,musicdelay = 0.010,momobgain = 1.,momowegain = 1.,momowigain = 14.,
     semobgain = 1.,semowgain = 1.,tauzi = 0.004,tauzj = 0.004,taue = 0.004,taup = 10.,noise = 0.,
     lgbias = 0.,dmax = 16,da = tauzi,dq = 2.,motaua = 1.,moadampl = 0.,learntime = 4.;
@@ -186,7 +186,6 @@ int main(int argc, char** argv) {
   semoprj->reinit();
 
   if (ISROOT) std::cerr << "music simtime = " << Globals::_musicstoptime << std::endl;
-  if (ISROOT) std::cerr << "music timestep = " << Globals::_musictimestep << std::endl;
 
   int n = tapsvec.size();
 
@@ -225,8 +224,6 @@ int main(int argc, char** argv) {
 
 
   if (ISROOT) std::cerr << "music simtime = " << Globals::_musicstoptime << " sec" << std::endl;
-  if (ISROOT) std::cerr << "music timestep = " << Globals::_musictimestep << " sec" << std::endl;
-  idur = (Globals::_musictimestep+Globals::_dt)/Globals::_dt;
 
   Globals::setnldot(nldot);
 
@@ -285,6 +282,17 @@ int main(int argc, char** argv) {
 	  if ((simtime>10. or simtime>learntime) and simtime<13.5) setmode(RECALL);
 	  if (simtime>13.5 and simtime<13.6) setmode(RESET);
 	  if (simtime>13.6 and simtime<100.) setmode(RECALL);
+	  break;
+      case 202:
+	  if (simtime>0. and simtime<10. and simtime<learntime) setmode(LEARN);
+	  if ((simtime>10. or simtime>learntime) and simtime<13.5) setmode(RECALL);
+	  if (simtime>13.5 and simtime<13.6) setmode(RESET);
+	  if (simtime>13.6 and simtime<100.) setmode(RECALL);
+	  break;
+      case 203:
+	  if (simtime>0. and simtime<2.1 and simtime<learntime) setmode(LEARN);
+	  if (simtime>2.1 and simtime<4.2) setmode(RESET);
+	  if (simtime>4.2) setmode(RECALL);
 	  break;
       default: Utils::mpierror("main::mkdelay","Illegal ctlmode");
       }

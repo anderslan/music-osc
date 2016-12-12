@@ -14,7 +14,7 @@ NCOL = 88
 
 def mkrandtimedpat_(H,U,udur,adur) :
     if udur<=0 :
-        raise AssertionError("Timedpat.mkrandtimedpat","Illegal udur<=0");
+        raise AssertionError("Timedpat.mkrandtimedpat","Illegal udur<=0")
     if H>1 :
         timedpats = mkrandtimedpat_(1,U,udur,adur)
         for h in range(1,H) :
@@ -27,7 +27,7 @@ def mkrandtimedpat_(H,U,udur,adur) :
         u = randint(0,U-1)
         dur = poisson(udur)
         for i in range(0,dur) :
-            if adur<=itime : break;
+            if adur<=itime : break
             timedpat[itime,u] = 1
             itime += 1
     return timedpat
@@ -137,7 +137,7 @@ def mkdata4(outasciifile = None) :
     return alldata
 
 def mkdata5(outasciifile = None) :
-    indata = mkrandtimedpat(2,44,3,100);
+    indata = mkrandtimedpat(2,44,3,100)
     alldata = mkmusicdata(indata,r1 = 100,nrepeat = 14)
     alldata = blankmusicdata(alldata,r0 = 400)
     if outasciifile!=None :
@@ -146,7 +146,7 @@ def mkdata5(outasciifile = None) :
 
 def mkdata6(outasciifile = None,n = 50,dur = 2,partdur = 100,u0 = 50,nrepeat = 25,
             blankr0 = 400) :
-    alldata = np.zeros((n*dur,88))
+    alldata = np.zeros((n*dur,NCOL))
     for p in range(n*dur) :
         alldata[p,22 + p/dur] = 1
         alldata[p,33 + p/dur] = 1
@@ -158,6 +158,18 @@ def mkdata6(outasciifile = None,n = 50,dur = 2,partdur = 100,u0 = 50,nrepeat = 2
     if outasciifile!=None :
         np.savetxt(outasciifile,alldata,fmt = "%1d")
     return alldata
+
+def mkdashedstripes(data,r0 = 0, r1 = -1,dur = 1,gap = 0,uu = []) :
+    if r1<0 : r1 = len(data)
+    if len(data)<=r0 : raise AssertionError("Timedpat.mkdata7","Illegal len(data)<=r0")
+    if len(data)<r1 : raise AssertionError("Timedpat.mkdata7","Illegal len(data)<r1")
+    if r0>r1 : raise AssertionError("Timedpat.mkdata7","Illegal r0>r1)")
+    for r in range(r0,r1) :
+        for u in uu :
+            if u<0 or u>len(data)-1 : raise AssertionError("Timedpat.mkdata7","Illegal u>len(data)")
+            rn = float(r - r0)/(dur + gap - 1)
+            data[r,u] = int(rn)%2
+#            print r,rn,data[r,u]
 
 def mkdata00(nrow,nrepeat = 5,repeatblank= 20,lastblank = 500,savetofile = False) :
     alldata = mkmusicdata("bwv772_100Hz.txt",r1 = nrow,nrepeat = nrepeat,repeatblank = repeatblank,
@@ -179,4 +191,15 @@ def mkdata02(savetofile = False) :
     alldata = mkdata6(n = 15,dur = 7,u0 = 35)
     if savetofile :
         np.savetxt("data02.txt",alldata,fmt = "%1d")
+    return alldata
+
+def mkdata03(nrow = 1000,savetofile = False) :
+    alldata = np.zeros((nrow,NCOL))
+    mkdashedstripes(alldata,r0 = 30,r1 = 210,uu = [0],dur = 25,gap = 5)
+    mkdashedstripes(alldata,r0 = 500,r1 = 650,uu = [0],dur = 25,gap = 5)
+#    mkdashedstripes(alldata,r0 = 30,r1 = nrow-30,uu = [20,22,24,40,42,44],dur = 25,gap = 5)
+#     mkdashedstripes(alldata,r0 = 60,r1 = nrow-60,uu = [30,32,34],dur = 7,gap = 3)
+#     mkdashedstripes(alldata,r0 = 90,r1 = nrow-90,uu = [50,52,54],dur = 5,gap = 2)
+    if savetofile :
+        np.savetxt("data03.txt",alldata,fmt = "%1d")
     return alldata

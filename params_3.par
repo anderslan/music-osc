@@ -35,4 +35,4 @@ modsulogstep        0
 moactlogstep        1
 moadalogstep        0
 
-doprn           false
+doprn            true
