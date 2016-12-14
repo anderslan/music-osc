@@ -168,11 +168,13 @@ void setmode(BrainMode brainmode) {
     _brainmode = brainmode;
 }
 
+int dolearn = 0,doreset = 0;
 void proctl() {
-    int dolearn = 0,doreset = 0;
     if (ctlpop->onthisrank()) {
-	if (ctlpop->getlgi()[0]>0.5) dolearn = 1;
-	if (ctlpop->getlgi()[1]>0.5) doreset = 1;
+	if (ctlpop->getlgi()[0]>0.5) { if (dolearn==0) fprintf(stderr,"L"); dolearn = 1; }
+	if (ctlpop->getlgi()[0]<0.5) { if (dolearn==1) fprintf(stderr,"R"); dolearn = 0; }
+	if (ctlpop->getlgi()[1]>0.5) { if (doreset==0) fprintf(stderr,"+");doreset = 1; }
+	if (ctlpop->getlgi()[1]<0.5) { if (doreset==1) fprintf(stderr,"-");doreset = 0; }
 	lgbias =  4 * ctlpop->getlgi()[4];
     }
     MPI_Bcast(&dolearn,1,MPI_INT,ctlpop->getrank0(),Globals::_comm_world);
