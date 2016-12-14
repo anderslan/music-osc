@@ -171,9 +171,9 @@ void setmode(BrainMode brainmode) {
 void proctl() {
     int dolearn = 0,doreset = 0;
     if (ctlpop->onthisrank()) {
-	if (ctlpop->getact()[0]>0.5) dolearn = 1;
-	if (ctlpop->getact()[1]>0.5) doreset = 1;
-	lgbias =  4 * ctlpop->getact()[4];
+	if (ctlpop->getlgi()[0]>0.5) dolearn = 1;
+	if (ctlpop->getlgi()[1]>0.5) doreset = 1;
+	lgbias =  4 * ctlpop->getlgi()[4];
     }
     MPI_Bcast(&dolearn,1,MPI_INT,ctlpop->getrank0(),Globals::_comm_world);
     MPI_Bcast(&doreset,1,MPI_INT,ctlpop->getrank0(),Globals::_comm_world);
