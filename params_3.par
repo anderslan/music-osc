@@ -3,8 +3,8 @@ H                   8
 U                  11
 taum                0.002
 wtagain            16.
-lgbias              0.
-noise               0, # 0.05
+lgbias              1.
+noise               0.0 # 0.1
 
 momobgain           1.
 momowegain          0.4
@@ -16,12 +16,12 @@ semobgain           2.
 semowgain           2.
 
 dmax                2.000
-dn                100
+dn                 50
 
-tauzi               0.002
+tauzi               0.020
 tauzj               0.002
 taue                0.002
-taup               10.
+taup               20.
 
 nldot            1000
 ctlmode           201
@@ -32,8 +32,9 @@ dolog            true
 selgilogstep        0
 seactlogstep        1
 mowsulogstep        0
-modsulogstep        0
+modsulogstep        1
 moactlogstep        1
 moadalogstep        0
+ctlactlogstep       1
 
 doprn            true

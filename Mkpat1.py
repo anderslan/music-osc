@@ -178,10 +178,10 @@ def mkdata00(nrow,nrepeat = 5,repeatblank= 20,lastblank = 500,savetofile = False
         np.savetxt("data00.txt",alldata,fmt = "%1d")
     return alldata
 
-def mkdata01(nrow = 200,nrepeat = 5,repeatblank= 20,lastblank = 400,c0 = 0,c1 = 40,savetofile = False) :
+def mkdata01(nrow = 500,nrepeat = 5,repeatblank= 20,c0 = 0,c1 = 50,savetofile = False) :
     data1 = mkmusicdata("bwv772_100Hz.txt",r1 = nrow,nrepeat = nrepeat,repeatblank = repeatblank,
-                           lastblank = 500)
-    data2 = mkmusicdata("bwv772_100Hz.txt",r1 = nrow,nrepeat = 2,lastblank = lastblank,c0 = c0,c1 = c1)
+                        lastblank = 1500)
+    data2 = mkmusicdata("bwv772_100Hz.txt",r1 = nrow,nrepeat = 2,lastblank = 1000,c0 = c0,c1 = c1)
     alldata = mergemusicdata([data1,data2])
     if savetofile :
         np.savetxt("data01.txt",alldata,fmt = "%1d")

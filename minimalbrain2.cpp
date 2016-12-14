@@ -29,7 +29,8 @@ float taum = 0.002,wtagain = 8.,musicdelay = 0.010,momobgain = 1.,momowegain = 1
     semobgain = 1.,semowgain = 1.,tauzi = 0.004,tauzj = 0.004,taue = 0.004,taup = 10.,noise = 0.,
     lgbias = 0.,dmax = 16,da = tauzi,dq = 2.,motaua = 1.,moadampl = 0.,learntime = 4.;
 bool dolog = true,doprn = true;
-int selgilogstep = 0,seactlogstep = 1,mowsulogstep = 0,modsulogstep = 0,moactlogstep = 1,moadalogstep = 0;
+int selgilogstep = 0,seactlogstep = 1,mowsulogstep = 0,modsulogstep = 0,moactlogstep = 1,moadalogstep = 0,
+    ctlactlogstep = 0;
 
 string paramfile = "params_3.par",traininfile = "bwv772_100Hz.dat";
 
@@ -60,6 +61,7 @@ void parseparams(string paramfile) {
     pp->postparam("modsulogstep",&modsulogstep,Parseparam::Int);
     pp->postparam("moactlogstep",&moactlogstep,Parseparam::Int);
     pp->postparam("moadalogstep",&moadalogstep,Parseparam::Int);
+    pp->postparam("ctlactlogstep",&ctlactlogstep,Parseparam::Int);
 
     pp->postparam("tauzi",&tauzi,Parseparam::Float);
     pp->postparam("tauzj",&tauzj,Parseparam::Float);
@@ -111,6 +113,9 @@ void setuplogging() {
     new PopLogger(mopop,"modsu.log",Pop::DSU,modsulogstep);
     new PopLogger(mopop,"moact.log",Pop::ACT,moactlogstep);
     new PopLogger(mopop,"moada.log",Pop::ADA,moadalogstep);
+
+    new PopLogger(ctlpop,"ctlact.log",Pop::ACT,ctlactlogstep);
+
 }
 
 void doprinting() {
@@ -130,6 +135,7 @@ BrainMode _brainmode = RESET;
 void setmode(BrainMode brainmode) {
     switch (brainmode) {
     case RESET:
+	if (Globals::getmpirank()==momoprj1->getrank0()) fprintf(stderr,"0");
 	semoprj->setprn(0.); semoprj->setbgain(0.); semoprj->setwgain(0.);
 	momoprj1->setprn(0.); momoprj1->setbgain(0.); momoprj1->setwegain(0.); momoprj1->setwigain(0.);
 	momoprj2->setprn(0.); momoprj2->setbgain(0.); momoprj2->setwegain(0.); momoprj2->setwigain(0.);
@@ -142,21 +148,39 @@ void setmode(BrainMode brainmode) {
 	mopop->setadapt(motaua,0.);
 	break;
     case LEARN:
+	if (Globals::getmpirank()==momoprj1->getrank0()) fprintf(stderr,"L");
 	semoprj->setprn(1.); semoprj->setbgain(1.); semoprj->setwgain(1.);
 	momoprj1->setprn(1.); momoprj1->setbgain(0.); momoprj1->setwegain(0.); momoprj1->setwigain(0.);
 	momoprj2->setprn(1.); momoprj2->setbgain(0.); momoprj2->setwegain(0.); momoprj2->setwigain(0.);
 	mopop->setadapt(motaua,0.);
 	break;
     case RECALL:
+	if (Globals::getmpirank()==momoprj1->getrank0()) fprintf(stderr,"R");
 	semoprj->setprn(0.); semoprj->setbgain(1.); semoprj->setwgain(1.);
 	momoprj1->setprn(0.); momoprj1->setbgain(momobgain/2);
 	momoprj1->setwegain(momowegain); momoprj1->setwigain(momowigain);
 	momoprj2->setprn(0.); momoprj2->setbgain(momobgain/2);
 	momoprj2->setwegain(momowegain); momoprj2->setwigain(momowigain);
+	mopop->setlgbias(lgbias);
 	mopop->setadapt(motaua,moadampl);
 	break;
     }
     _brainmode = brainmode;
+}
+
+void proctl() {
+    int dolearn = 0,doreset = 0;
+    if (ctlpop->onthisrank()) {
+	if (ctlpop->getact()[0]>0.5) dolearn = 1;
+	if (ctlpop->getact()[1]>0.5) doreset = 1;
+	lgbias =  4 * ctlpop->getact()[4];
+    }
+    MPI_Bcast(&dolearn,1,MPI_INT,ctlpop->getrank0(),Globals::_comm_world);
+    MPI_Bcast(&doreset,1,MPI_INT,ctlpop->getrank0(),Globals::_comm_world);
+    MPI_Bcast(&lgbias,1,MPI_FLOAT,ctlpop->getrank0(),Globals::_comm_world);
+    if (dolearn==1) setmode(LEARN); else setmode(RECALL);
+    if (doreset==1) setmode(RESET);
+    mopop->setlgbias(lgbias);
 }
 
 int main(int argc, char** argv) {
@@ -170,7 +194,7 @@ int main(int argc, char** argv) {
   sepop->setnormtype(Pop::NONE);
   sepop->setwtagain(1.);
 
-  //  ctlpop = new SensorPop("controlinput",musicdelay,1,1,3,Globals::_dt); 
+  ctlpop = new SensorPop("controlinput",musicdelay,1,1,5,Globals::_dt); 
 
   mopop = new MotorPop("motoroutput",musicdelay,nrank,H,U,taum); 
   mopop->setnormtype(Pop::NONE);
@@ -189,8 +213,6 @@ int main(int argc, char** argv) {
 
   semoprj = new Prj11(sepop,mopop,tauzi,tauzj,taue,10.);
   semoprj->reinit();
-
-  
 
   if (ISROOT) std::cerr << "music simtime = " << Globals::_musicstoptime << std::endl;
 
@@ -259,6 +281,9 @@ int main(int argc, char** argv) {
 
       simtime = Globals::_simtime;
 
+      //#define KEYCTL
+
+#ifndef KEYCTL
       switch (ctlmode) {
       case 0:
 	  setmode(RESET);
@@ -300,10 +325,10 @@ int main(int argc, char** argv) {
 	  if (simtime>10. and simtime<100.) setmode(RECALL);
 	  break;
       case 201:
-	  if (simtime>0. and simtime<10. and simtime<learntime) setmode(LEARN);
-	  if ((simtime>10. or simtime>learntime) and simtime<13.5) setmode(RECALL);
-	  if (simtime>13.5 and simtime<13.6) setmode(RESET);
-	  if (simtime>13.6 and simtime<100.) setmode(RECALL);
+	  if (simtime>0. and simtime<25. and simtime<learntime) setmode(LEARN);
+	  if ((simtime>25. or simtime>learntime) and simtime<35.5) setmode(RECALL);
+	  if (simtime>35.5 and simtime<35.6) setmode(RESET);
+	  if (simtime>36. and simtime<100.) setmode(RECALL);
 	  break;
       case 202:
 	  if (simtime>0. and simtime<10. and simtime<learntime) setmode(LEARN);
@@ -318,6 +343,11 @@ int main(int argc, char** argv) {
 	  break;
       default: Utils::mpierror("main::mkdelay","Illegal ctlmode");
       }
+#else
+
+      proctl();
+
+#endif // not KEYCTL
 
       Globals::updstateall();
   }

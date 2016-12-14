@@ -38,9 +38,11 @@ def displ1(r0 = 0,r1 = -1,u0 = 0,u1 = -1,fig = 1,mode = 'img') :
     except OSError:
         mada_mtime = 0
 
+    now = time.time()
     max_mtime = np.max([slgi_mtime,sact_mtime,mwsu_mtime,mdsu_mtime,mact_mtime,mada_mtime])
 
 #    print max_mtime,slgi_mtime,sact_mtime,mwsu_mtime,mdsu_mtime,mact_mtime,mada_mtime
+    if max_mtime <= now-60 : print "WARNING: All files are > 1 min old"
 
     nplt = 0
     if max_mtime - 1 <= slgi_mtime:

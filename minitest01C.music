@@ -4,7 +4,7 @@ timestep = 0.010
 [source]
   np = 1
   binary = ./filetobrain
-  args = data01.txt
+  args = data01.txt command01.txt
 
 [sink]
   np = 1
@@ -12,8 +12,9 @@ timestep = 0.010
   args = foo.txt
 
 [brain]
-  np = 152
+  np = 153
   binary = ./minimalbrain2
 
 source.out -> brain.sensoryinput
+source.commands -> brain.controlinput
 brain.motoroutput -> sink.in
