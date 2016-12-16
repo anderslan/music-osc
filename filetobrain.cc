@@ -112,7 +112,7 @@ main (int argc, char* argv[])
     if (usecommandfile and (runtime->time() >= nextCommandTime)) {
       for (int i=0; i<OurUDPProtocol::COMMANDKEYS; ++i)
 	commandfile >> package.commandKeys[i];
-      std::cerr << "Command at " << nextCommandTime << std::endl;
+      //      std::cerr << "Command at " << nextCommandTime << std::endl;
       commandfile >> nextCommandTime;
     }
 

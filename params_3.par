@@ -7,7 +7,7 @@ lgbias              1.
 noise               0.0 # 0.1
 
 momobgain           1.
-momowegain          0.4
+momowegain          0.8
 momowigain         16.
 motaua              0.020
 moadampl            0.
@@ -15,7 +15,7 @@ moadampl            0.
 semobgain           2.
 semowgain           2.
 
-dmax                2.000
+dmax              10.0
 dn                 50
 
 tauzi               0.020
@@ -24,17 +24,19 @@ taue                0.002
 taup               20.
 
 nldot            1000
+externctl        true
 ctlmode           201
-learntime          10.
+learntime          25.
+traininfile         ____bwv772_100Hz.dat
 trnpat           2000
 
 dolog            true
 selgilogstep        0
 seactlogstep        1
 mowsulogstep        0
-modsulogstep        1
+modsulogstep        0
 moactlogstep        1
 moadalogstep        0
-ctlactlogstep       1
+ctllgilogstep       1
 
-doprn            true
+doprn           false

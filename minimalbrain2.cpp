@@ -24,13 +24,13 @@
 
 using namespace std;
 
-int nrank = 8,H = 8,U = 88/H,dn = 40,nldot = 0,ctlmode = 0,trnpat = -1;
+int nrank = 8,H = 8,U = 88/H,dn = 40,nldot = 0,ctlmode = 0,trnpat = -1,stoprun = 0;
 float taum = 0.002,wtagain = 8.,musicdelay = 0.010,momobgain = 1.,momowegain = 1.,momowigain = 14.,
     semobgain = 1.,semowgain = 1.,tauzi = 0.004,tauzj = 0.004,taue = 0.004,taup = 10.,noise = 0.,
     lgbias = 0.,dmax = 16,da = tauzi,dq = 2.,motaua = 1.,moadampl = 0.,learntime = 4.;
-bool dolog = true,doprn = true;
+bool dolog = true,doprn = true,externctl;
 int selgilogstep = 0,seactlogstep = 1,mowsulogstep = 0,modsulogstep = 0,moactlogstep = 1,moadalogstep = 0,
-    ctlactlogstep = 0;
+    ctllgilogstep = 0;
 
 string paramfile = "params_3.par",traininfile = "bwv772_100Hz.dat";
 
@@ -61,7 +61,7 @@ void parseparams(string paramfile) {
     pp->postparam("modsulogstep",&modsulogstep,Parseparam::Int);
     pp->postparam("moactlogstep",&moactlogstep,Parseparam::Int);
     pp->postparam("moadalogstep",&moadalogstep,Parseparam::Int);
-    pp->postparam("ctlactlogstep",&ctlactlogstep,Parseparam::Int);
+    pp->postparam("ctllgilogstep",&ctllgilogstep,Parseparam::Int);
 
     pp->postparam("tauzi",&tauzi,Parseparam::Float);
     pp->postparam("tauzj",&tauzj,Parseparam::Float);
@@ -78,6 +78,7 @@ void parseparams(string paramfile) {
     pp->postparam("dq",&dq,Parseparam::Float);
     pp->postparam("nldot",&nldot,Parseparam::Int);
     pp->postparam("ctlmode",&ctlmode,Parseparam::Int);
+    pp->postparam("externctl",&externctl,Parseparam::Int);
     pp->postparam("traininfile",&traininfile,Parseparam::String);
     pp->postparam("trnpat",&trnpat,Parseparam::Int);
     pp->postparam("learntime",&learntime,Parseparam::Float);
@@ -114,7 +115,8 @@ void setuplogging() {
     new PopLogger(mopop,"moact.log",Pop::ACT,moactlogstep);
     new PopLogger(mopop,"moada.log",Pop::ADA,moadalogstep);
 
-    new PopLogger(ctlpop,"ctlact.log",Pop::ACT,ctlactlogstep);
+    new PopLogger(ctlpop,"ctlgi.log",Pop::LGI,ctllgilogstep);
+    new PopLogger(ctlpop,"ctact.log",Pop::ACT,ctllgilogstep);
 
 }
 
@@ -129,13 +131,26 @@ void doprinting() {
 
 #define RESETDELAYBUF
 
-enum BrainMode { RESET, LEARN, RECALL } ;
-BrainMode _brainmode = RESET;
+enum BrainMode { RESET = 0, LEARN, RECALL } ;
+BrainMode _brainmode = LEARN;
+
+void prnbrainmode(BrainMode brainmode) {
+    if (ISROOT) {
+	string modestr;
+	switch (brainmode) {
+	case RESET: modestr = "RESET"; break;
+	case LEARN: modestr = "LEARN"; break;
+	case RECALL: modestr = "RECALL"; break;
+	}
+	fprintf(stderr," [%.2f %s %.2f] ",Globals::_simtime,modestr.c_str(),lgbias);
+    }
+}
 
 void setmode(BrainMode brainmode) {
+    if (Globals::_simtime<0.01) brainmode = LEARN;
+    if (brainmode!=_brainmode) prnbrainmode(brainmode);
     switch (brainmode) {
     case RESET:
-	if (Globals::getmpirank()==momoprj1->getrank0()) fprintf(stderr,"0");
 	semoprj->setprn(0.); semoprj->setbgain(0.); semoprj->setwgain(0.);
 	momoprj1->setprn(0.); momoprj1->setbgain(0.); momoprj1->setwegain(0.); momoprj1->setwigain(0.);
 	momoprj2->setprn(0.); momoprj2->setbgain(0.); momoprj2->setwegain(0.); momoprj2->setwigain(0.);
@@ -145,17 +160,17 @@ void setmode(BrainMode brainmode) {
 	    momoprj2->resetdelaybuf();
 	}
 #endif
+	mopop->setlgbias(0.);
 	mopop->setadapt(motaua,0.);
 	break;
     case LEARN:
-	if (Globals::getmpirank()==momoprj1->getrank0()) fprintf(stderr,"L");
 	semoprj->setprn(1.); semoprj->setbgain(1.); semoprj->setwgain(1.);
 	momoprj1->setprn(1.); momoprj1->setbgain(0.); momoprj1->setwegain(0.); momoprj1->setwigain(0.);
 	momoprj2->setprn(1.); momoprj2->setbgain(0.); momoprj2->setwegain(0.); momoprj2->setwigain(0.);
+	mopop->setlgbias(0.);
 	mopop->setadapt(motaua,0.);
 	break;
     case RECALL:
-	if (Globals::getmpirank()==momoprj1->getrank0()) fprintf(stderr,"R");
 	semoprj->setprn(0.); semoprj->setbgain(1.); semoprj->setwgain(1.);
 	momoprj1->setprn(0.); momoprj1->setbgain(momobgain/2);
 	momoprj1->setwegain(momowegain); momoprj1->setwigain(momowigain);
@@ -168,21 +183,31 @@ void setmode(BrainMode brainmode) {
     _brainmode = brainmode;
 }
 
-int dolearn = 0,doreset = 0;
+/* _brainmode is the enabled mode */
 void proctl() {
-    if (ctlpop->onthisrank()) {
-	if (ctlpop->getlgi()[0]>0.5) { if (dolearn==0) fprintf(stderr,"L"); dolearn = 1; }
-	if (ctlpop->getlgi()[0]<0.5) { if (dolearn==1) fprintf(stderr,"R"); dolearn = 0; }
-	if (ctlpop->getlgi()[1]>0.5) { if (doreset==0) fprintf(stderr,"+");doreset = 1; }
-	if (ctlpop->getlgi()[1]<0.5) { if (doreset==1) fprintf(stderr,"-");doreset = 0; }
-	lgbias =  4 * ctlpop->getlgi()[4];
+    int brainmode;
+    float lgb;
+    if (Globals::getmpirank()==ctlpop->getrank0()) {
+	int dolea = (ctlpop->getact()[0]>0.5);
+ 	int dores = (ctlpop->getact()[1]>0.5);
+ 	int dostop = (ctlpop->getact()[3]>0.5);
+	lgb = 6 * ctlpop->getact()[4] - 3.;
+	lgbias = lgb;
+	if (dostop>0) {
+	    stoprun = 1;
+	    if (ISROOT) fprintf(stderr,"Stopping!\n");
+	} else if (dores>0)
+	    brainmode = (int)RESET;
+	else if (dolea>0)
+	    brainmode = (int)LEARN;
+	else
+	    brainmode = (int)RECALL;
     }
-    MPI_Bcast(&dolearn,1,MPI_INT,ctlpop->getrank0(),Globals::_comm_world);
-    MPI_Bcast(&doreset,1,MPI_INT,ctlpop->getrank0(),Globals::_comm_world);
+    MPI_Bcast(&stoprun,1,MPI_INT,ctlpop->getrank0(),Globals::_comm_world);
+    MPI_Bcast(&brainmode,1,MPI_INT,ctlpop->getrank0(),Globals::_comm_world);
     MPI_Bcast(&lgbias,1,MPI_FLOAT,ctlpop->getrank0(),Globals::_comm_world);
-    if (dolearn==1) setmode(LEARN); else setmode(RECALL);
-    if (doreset==1) setmode(RESET);
-    mopop->setlgbias(lgbias);
+    setmode((BrainMode)brainmode);
+
 }
 
 int main(int argc, char** argv) {
@@ -213,8 +238,11 @@ int main(int argc, char** argv) {
   momoprj2->setselfconn(true,true,true);
   momoprj2->reinit();
 
-  semoprj = new Prj11(sepop,mopop,tauzi,tauzj,taue,10.);
-  semoprj->reinit();
+  semoprj = new Prj11(sepop,mopop,Globals::_dt,Globals::_dt,taue,10.);
+  vector<float> bj(H*U,-3.5); // Something strange with this -3.5 -- 5.
+  vector<vector<float> > wij(H*U,vector<float>(H*U,0.));
+  for (int u=0; u<H*U; u++) wij[u][u] = 5;
+  semoprj->initbw(bj,wij);
 
   if (ISROOT) std::cerr << "music simtime = " << Globals::_musicstoptime << std::endl;
 
@@ -260,8 +288,6 @@ int main(int argc, char** argv) {
 
   float simtime; int inon;
 
-#define DATA3
-
   Globals::start();
 
   /* Read from file here */
@@ -279,77 +305,72 @@ int main(int argc, char** argv) {
       if (ISROOT) fprintf(stderr," Done!\n");
   }
 
-  while (Globals::_musicruntime->time() < Globals::_musicstoptime ) {
+  while ((stoprun==0) and (Globals::_musicruntime->time() < Globals::_musicstoptime - 3)) {
 
       simtime = Globals::_simtime;
 
-      //#define KEYCTL
+      if (not externctl) {
 
-#ifndef KEYCTL
-      switch (ctlmode) {
-      case 0:
-	  setmode(RESET);
-	  break;
-      case 1:
-	  setmode(LEARN); 
-	  break;
-      case 2:
-	  setmode(RECALL);
-	  break;
-      case 10:
-	  inon = sepop->inon();
-	  if (inon==0 or simtime>learntime) {
+	  switch (ctlmode) {
+	  case 0:
+	      setmode(RESET);
+	      break;
+	  case 1:
+	      setmode(LEARN); 
+	      break;
+	  case 2:
 	      setmode(RECALL);
-	      //	      if (ISROOT) fprintf(stderr,"R:%5.3f:%d\n",simtime,inon);
-	  } else {
-	      setmode(LEARN);
-	      //	      if (ISROOT) fprintf(stderr,"L:%5.3f:%d\n",simtime,inon);
+	      break;
+	  case 10:
+	      inon = sepop->inon();
+	      if (inon==0 or simtime>learntime) {
+		  setmode(RECALL);
+		  //	      if (ISROOT) fprintf(stderr,"R:%5.3f:%d\n",simtime,inon);
+	      } else {
+		  setmode(LEARN);
+		  //	      if (ISROOT) fprintf(stderr,"L:%5.3f:%d\n",simtime,inon);
+	      }
+	      break;
+	  case 101:
+	      if (simtime>0. and simtime<learntime) setmode(LEARN);
+	      if (simtime>learntime and simtime<7.) setmode(RECALL);
+	      if (simtime>7. and simtime<10.) setmode(RESET);
+	      if (simtime>10. and simtime<16.) setmode(RECALL);
+	      if (simtime>16. and simtime<17.) setmode(RESET);
+	      if (simtime>17. and simtime<21.) setmode(LEARN);
+	      if (simtime>21. and simtime<24.) setmode(RECALL);
+	      if (simtime>24. and simtime<26.) setmode(RESET);
+	      if (simtime>26. and simtime<100.) setmode(RECALL);
+	      break;
+	  case 102:
+	      if (simtime<learntime) setmode(LEARN);
+	      if (simtime>3. and simtime<5.) setmode(RESET);
+	      if (simtime>5.) setmode(RECALL);
+	      break;
+	  case 200:
+	      if (simtime>0. and simtime<10.) setmode(LEARN);
+	      if (simtime>10. and simtime<100.) setmode(RECALL);
+	      break;
+	  case 201:
+	      if (simtime>0. and simtime<25. and simtime<learntime) setmode(LEARN);
+	      if ((simtime>25. or simtime>learntime) and simtime<35.5) setmode(RECALL);
+	      if (simtime>35.5 and simtime<35.6) setmode(RESET);
+	      if (simtime>36. and simtime<100.) setmode(RECALL);
+	      break;
+	  case 202:
+	      if (simtime>0. and simtime<10. and simtime<learntime) setmode(LEARN);
+	      if ((simtime>10. or simtime>learntime) and simtime<13.5) setmode(RECALL);
+	      if (simtime>13.5 and simtime<13.6) setmode(RESET);
+	      if (simtime>13.6 and simtime<100.) setmode(RECALL);
+	      break;
+	  case 203:
+	      if (simtime>0. and simtime<2.1 and simtime<learntime) setmode(LEARN);
+	      if (simtime>2.1 and simtime<4.2) setmode(RESET);
+	      if (simtime>4.2) setmode(RECALL);
+	      break;
+	  default: Utils::mpierror("main::mkdelay","Illegal ctlmode");
 	  }
-	  break;
-      case 101:
-	  if (simtime>0. and simtime<learntime) setmode(LEARN);
-	  if (simtime>learntime and simtime<7.) setmode(RECALL);
-	  if (simtime>7. and simtime<10.) setmode(RESET);
-	  if (simtime>10. and simtime<16.) setmode(RECALL);
-	  if (simtime>16. and simtime<17.) setmode(RESET);
-	  if (simtime>17. and simtime<21.) setmode(LEARN);
-	  if (simtime>21. and simtime<24.) setmode(RECALL);
-	  if (simtime>24. and simtime<26.) setmode(RESET);
-	  if (simtime>26. and simtime<100.) setmode(RECALL);
-	  break;
-      case 102:
-	  if (simtime<learntime) setmode(LEARN);
-	  if (simtime>3. and simtime<5.) setmode(RESET);
-	  if (simtime>5.) setmode(RECALL);
-	  break;
-      case 200:
-	  if (simtime>0. and simtime<10.) setmode(LEARN);
-	  if (simtime>10. and simtime<100.) setmode(RECALL);
-	  break;
-      case 201:
-	  if (simtime>0. and simtime<25. and simtime<learntime) setmode(LEARN);
-	  if ((simtime>25. or simtime>learntime) and simtime<35.5) setmode(RECALL);
-	  if (simtime>35.5 and simtime<35.6) setmode(RESET);
-	  if (simtime>36. and simtime<100.) setmode(RECALL);
-	  break;
-      case 202:
-	  if (simtime>0. and simtime<10. and simtime<learntime) setmode(LEARN);
-	  if ((simtime>10. or simtime>learntime) and simtime<13.5) setmode(RECALL);
-	  if (simtime>13.5 and simtime<13.6) setmode(RESET);
-	  if (simtime>13.6 and simtime<100.) setmode(RECALL);
-	  break;
-      case 203:
-	  if (simtime>0. and simtime<2.1 and simtime<learntime) setmode(LEARN);
-	  if (simtime>2.1 and simtime<4.2) setmode(RESET);
-	  if (simtime>4.2) setmode(RECALL);
-	  break;
-      default: Utils::mpierror("main::mkdelay","Illegal ctlmode");
-      }
-#else
-
-      proctl();
-
-#endif // not KEYCTL
+      } else proctl();
 
       Globals::updstateall();
   }

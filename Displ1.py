@@ -10,7 +10,7 @@ import datetime
 
 import Displ
 
-def displ1(r0 = 0,r1 = -1,u0 = 0,u1 = -1,fig = 1,mode = 'img') :
+def displ1(r0 = 0,r1 = -1,u0 = 0,u1 = -1,ylim = [],fig = 1,mode = 'img') :
 
     slgi = None ; sact = None ; mwsu = None ; mdsu = None ; mact = None; mada = None;
     try:
@@ -85,18 +85,18 @@ def displ1(r0 = 0,r1 = -1,u0 = 0,u1 = -1,fig = 1,mode = 'img') :
             ax.set_ylim(-0.1,1.1)
     if mwsu!=None :
         iplt += 1
-        ax = plt.subplot(1,3,2)
+        ax = plt.subplot(1,nplt,iplt)
         if mode=='img' :
             Displ.imshow(mwsu,axes=ax,r0 = r0,r1 = r1,u0 = u0,u1 = u1,clear=False)
         elif mode=='plt' :
-            Displ.plot(mwsu,axes=ax,r0 = r0,r1 = r1,u0 = u0,u1 = u1,clear=False)
+            Displ.plot(mwsu,axes=ax,r0 = r0,r1 = r1,u0 = u0,u1 = u1,ylim = ylim,clear=False)
     if mdsu!=None :
         iplt += 1
         ax = plt.subplot(1,nplt,iplt)
         if mode=='img' :
             Displ.imshow(mdsu,axes=ax,r0 = r0,r1 = r1,u0 = u0,u1 = u1,clear=False)
         elif mode=='plt' :
-            Displ.plot(mdsu,axes=ax,r0 = r0,r1 = r1,u0 = u0,u1 = u1,clear=False)
+            Displ.plot(mdsu,axes=ax,r0 = r0,r1 = r1,u0 = u0,u1 = u1,ylim = ylim,clear=False)
     if mact!=None :
         iplt += 1
         ax = plt.subplot(1,nplt,iplt)
